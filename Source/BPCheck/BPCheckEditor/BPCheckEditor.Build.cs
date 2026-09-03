@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class BPCheck : ModuleRules
+public class BPCheckEditor : ModuleRules
 {
-	public BPCheck(ReadOnlyTargetRules Target) : base(Target)
+	public BPCheckEditor(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		
@@ -38,6 +38,7 @@ public class BPCheck : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
+                "BPCheckCore"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

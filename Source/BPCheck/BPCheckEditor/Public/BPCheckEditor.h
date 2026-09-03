@@ -4,7 +4,7 @@
 
 #include "Modules/ModuleManager.h"
 
-class FBPCheckModule : public IModuleInterface
+class FBPCheckEditorModule : public IModuleInterface
 {
 public:
 
