@@ -1,0 +1,29 @@
+{
+    "FileVersion": 3,
+    "Version": 1,
+    "VersionName": "1.0",
+    "FriendlyName": "BPCheck",
+    "Description": "Blueprint static analyzer",
+    "Category": "Other",
+    "CreatedBy": "Sebight",
+    "CreatedByURL": "",
+    "DocsURL": "",
+    "MarketplaceURL": "",
+    "SupportURL": "",
+    "CanContainContent": true,
+    "IsBetaVersion": false,
+    "IsExperimentalVersion": false,
+    "Installed": false,
+    "Modules": [
+        {
+            "Name": "BPCheckCore",
+            "Type": "Editor",
+            "LoadingPhase": "Default"
+        },
+        {
+            "Name": "BPCheckEditor",
+            "Type": "Editor",
+            "LoadingPhase": "Default"
+        }
+    ]
+}
