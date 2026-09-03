@@ -4,16 +4,20 @@
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
+DEFINE_LOG_CATEGORY(LogBPCheckCore);
+
 void FBPCheckCoreModule::StartupModule()
 {
-	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
-	UE_LOG(LogHAL, Log, TEXT("Broca ccola"));
+	UE_LOG(LogBPCheckCore, Log, TEXT("BPCheck-Core started."));
 }
 
 void FBPCheckCoreModule::ShutdownModule()
 {
-	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
-	// we call this function before unloading the module.
+}
+
+void FAnalyzer::Analyze()
+{
+	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze"));
 }
 
 #undef LOCTEXT_NAMESPACE

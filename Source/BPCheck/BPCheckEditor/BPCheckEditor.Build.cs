@@ -38,7 +38,9 @@ public class BPCheckEditor : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
-                "BPCheckCore"
+                "BPCheckCore",
+                "UnrealEd",
+                "ToolMenus"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

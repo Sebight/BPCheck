@@ -4,11 +4,15 @@
 
 #include "Modules/ModuleManager.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogBPCheckEditor, Log, All);
+
 class FBPCheckEditorModule : public IModuleInterface
 {
 public:
-
 	/** IModuleInterface implementation */
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
+
+	void CreateMenuItem();
+	void OnButtonClicked();
 };
