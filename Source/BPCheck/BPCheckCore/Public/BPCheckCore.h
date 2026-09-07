@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "BlueprintCompilerExtension.h"
 #include "Modules/ModuleManager.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogBPCheckCore, Log, All);
@@ -18,5 +19,5 @@ public:
 class BPCHECKCORE_API FAnalyzer
 {
 public:
-	static void Analyze();
+	static void Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
 };

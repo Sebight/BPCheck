@@ -3,6 +3,8 @@
 #pragma once
 
 #include "Modules/ModuleManager.h"
+#include "BlueprintCompilerExtension.h"
+#include "BPCheckEditor.generated.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogBPCheckEditor, Log, All);
 
@@ -15,4 +17,13 @@ public:
 
 	void CreateMenuItem();
 	void OnButtonClicked();
+};
+
+UCLASS()
+class BPCHECKEDITOR_API UBPCompilerExtension : public UBlueprintCompilerExtension
+{
+	GENERATED_BODY()
+
+protected:
+	virtual void ProcessBlueprintCompiled(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data) override;
 };

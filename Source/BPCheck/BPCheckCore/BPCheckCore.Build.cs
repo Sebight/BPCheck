@@ -36,8 +36,9 @@ public class BPCheckCore : ModuleRules
 			{
 				"CoreUObject",
 				"Engine",
-				"Slate",
-				"SlateCore",
+				"UnrealEd",
+				"Kismet",
+				"KismetCompiler"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
