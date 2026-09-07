@@ -3,6 +3,7 @@
 #include "BPCheckEditor.h"
 #include "ToolMenus.h"
 #include "BPCheckCore.h"
+#include "BlueprintCompilationManager.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -10,9 +11,11 @@ DEFINE_LOG_CATEGORY(LogBPCheckEditor);
 
 void FBPCheckEditorModule::StartupModule()
 {
-	UE_LOG(LogTemp, Log, TEXT("BPCheck-Editor started."));
 	UE_LOG(LogBPCheckEditor, Log, TEXT("BPCheck-Editor started."));
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FBPCheckEditorModule::CreateMenuItem));
+
+	UBPCompilerExtension* Extension = NewObject<UBPCompilerExtension>();
+	FBlueprintCompilationManager::RegisterCompilerExtension(UBlueprint::StaticClass(), Extension);
 }
 
 void FBPCheckEditorModule::ShutdownModule()
@@ -39,7 +42,19 @@ void FBPCheckEditorModule::CreateMenuItem()
 
 void FBPCheckEditorModule::OnButtonClicked()
 {
-	FAnalyzer::Analyze();
+}
+
+void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
+{
+	if (!CompilationContext.Blueprint->GetPackage()->GetName().StartsWith("/Game/"))
+	{
+		// This skips analysis of any engine side Blueprints
+		// TODO(Seb): This also skips all plugins, which might be an issue
+		return;
+	}
+
+	FAnalyzer::Analyze(CompilationContext, Data);
+	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }
 
 #undef LOCTEXT_NAMESPACE
