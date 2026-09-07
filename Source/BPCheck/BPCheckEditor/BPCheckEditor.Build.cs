@@ -40,7 +40,9 @@ public class BPCheckEditor : ModuleRules
 				"SlateCore",
                 "BPCheckCore",
                 "UnrealEd",
-                "ToolMenus"
+                "ToolMenus",
+                "Kismet",
+                "KismetCompiler"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
