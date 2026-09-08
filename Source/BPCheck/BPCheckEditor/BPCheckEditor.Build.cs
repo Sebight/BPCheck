@@ -42,7 +42,9 @@ public class BPCheckEditor : ModuleRules
                 "UnrealEd",
                 "ToolMenus",
                 "Kismet",
-                "KismetCompiler"
+                "KismetCompiler",
+				"Json",
+				"JsonUtilities"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

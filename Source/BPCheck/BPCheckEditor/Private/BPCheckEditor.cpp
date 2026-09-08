@@ -4,6 +4,8 @@
 #include "ToolMenus.h"
 #include "BPCheckCore.h"
 #include "BlueprintCompilationManager.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "JsonObjectConverter.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -55,6 +57,49 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 
 	FAnalyzer::Analyze(CompilationContext, Data);
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
+}
+
+// Run using "unreal_bin" "project_path" -run=BPCheck -NoShaderCompile -AllowStdOutLogVerbosity 2>&1 | Select-String "BPCheck"
+int32 UBPCheckCommandlet::Main(const FString& String)
+{
+	UE_LOG(LogBPCheckEditor, Log, TEXT("Running BPCheck Commandlet."));
+
+	auto& AssetRegistryMod = FModuleManager::Get().LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	auto& AssetRegistry = AssetRegistryMod.Get();
+
+	TArray<FAssetData> FoundAssets;
+	AssetRegistry.GetAssetsByClass(UBlueprint::StaticClass()->GetClassPathName(), FoundAssets);
+
+	TArray<FAnalyzerResult> Results;
+
+	for (const auto& AssetData : FoundAssets)
+	{
+		if (!AssetData.GetPackage()->GetName().StartsWith("/Game/"))
+		{
+			// Ditto with the TODO above
+			continue;
+		}
+
+		UBlueprint* AssetObject = Cast<UBlueprint>(AssetData.GetAsset());
+
+		if (!AssetObject)
+		{
+			continue;
+		}
+
+		Results.Push(FAnalyzer::Analyze(AssetObject));
+	}
+
+	FAnalyzerReport Report;
+	Report.Results = MoveTemp(Results);
+
+	FString Json;
+	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Json);
+	FJsonSerializer::Serialize(FJsonObjectConverter::UStructToJsonObject(Report).ToSharedRef(), Writer);
+	UE_LOG(LogBPCheckEditor, Log, TEXT("%s"), *Json);
+
+	return 0;
 }
 
 #undef LOCTEXT_NAMESPACE

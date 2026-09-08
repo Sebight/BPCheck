@@ -16,9 +16,21 @@ void FBPCheckCoreModule::ShutdownModule()
 
 }
 
-void FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
+FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
 {
-	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *CompilationContext.Blueprint->GetName());
+	return Analyze(CompilationContext.Blueprint);
+}
+
+FAnalyzerResult FAnalyzer::Analyze(UBlueprint* Blueprint)
+{
+	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *Blueprint->GetName());
+
+	FAnalyzerResult Result;
+	Result.BlueprintName = Blueprint->GetName();
+	Result.Success = true;
+	Result.Message = "no suggestions";
+
+	return Result;
 }
 
 #undef LOCTEXT_NAMESPACE
