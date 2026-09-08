@@ -62,6 +62,22 @@ int32 UBPCheckCommandlet::Main(const FString& String)
 {
 	UE_LOG(LogBPCheckEditor, Display, TEXT("Running Commandlet."));
 
+	auto& AssetRegistryMod = FModuleManager::Get().LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	auto& AssetRegistry = AssetRegistryMod.Get();
+
+	TArray<FAssetData> FoundAssets;
+	AssetRegistry.GetAssetsByClass(UBlueprint::StaticClass()->GetClassPathName(), FoundAssets);
+
+	for (const auto& AssetData : FoundAssets)
+	{
+		if (!AssetData.GetPackage()->GetName().StartsWith("/Game/"))
+		{
+			// Ditto with the TODO above
+			continue;
+		}
+		UE_LOG(LogBPCheckEditor, Display, TEXT("Found BP: %s"), *AssetData.GetAsset()->GetName());
+	}
+
 	return 0;
 }
 
