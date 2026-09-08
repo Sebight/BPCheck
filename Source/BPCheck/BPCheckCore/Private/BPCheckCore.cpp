@@ -25,7 +25,12 @@ FAnalyzerResult FAnalyzer::Analyze(UBlueprint* Blueprint)
 {
 	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *Blueprint->GetName());
 
-	return { true, "BPCheck ran successfully." };
+	FAnalyzerResult Result;
+	Result.BlueprintName = Blueprint->GetName();
+	Result.Success = true;
+	Result.Message = "no suggestions";
+
+	return Result;
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -23,10 +23,13 @@ struct FAnalyzerResult
 	GENERATED_BODY()
 
 	UPROPERTY()
-	bool Success = false;
+	FString BlueprintName;
 
 	UPROPERTY()
 	FString Message;
+
+	UPROPERTY()
+	bool Success = false;
 };
 
 USTRUCT()
