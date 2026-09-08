@@ -4,6 +4,8 @@
 
 #include "Modules/ModuleManager.h"
 #include "BlueprintCompilerExtension.h"
+#include "Commandlets/Commandlet.h"
+
 #include "BPCheckEditor.generated.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogBPCheckEditor, Log, All);
@@ -26,4 +28,12 @@ class BPCHECKEDITOR_API UBPCompilerExtension : public UBlueprintCompilerExtensio
 
 protected:
 	virtual void ProcessBlueprintCompiled(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data) override;
+};
+
+UCLASS()
+class BPCHECKEDITOR_API UBPCheckCommandlet : public UCommandlet
+{
+	GENERATED_BODY()
+public:
+	virtual int32 Main(const FString&) override;
 };

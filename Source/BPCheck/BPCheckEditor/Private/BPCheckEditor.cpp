@@ -4,6 +4,7 @@
 #include "ToolMenus.h"
 #include "BPCheckCore.h"
 #include "BlueprintCompilationManager.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -55,6 +56,13 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 
 	FAnalyzer::Analyze(CompilationContext, Data);
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
+}
+
+int32 UBPCheckCommandlet::Main(const FString& String)
+{
+	UE_LOG(LogBPCheckEditor, Display, TEXT("Running Commandlet."));
+
+	return 0;
 }
 
 #undef LOCTEXT_NAMESPACE
