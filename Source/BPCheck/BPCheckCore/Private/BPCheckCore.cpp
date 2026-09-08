@@ -18,7 +18,12 @@ void FBPCheckCoreModule::ShutdownModule()
 
 void FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
 {
-	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *CompilationContext.Blueprint->GetName());
+	Analyze(CompilationContext.Blueprint);
+}
+
+void FAnalyzer::Analyze(UBlueprint* Blueprint)
+{
+	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *Blueprint->GetName());
 }
 
 #undef LOCTEXT_NAMESPACE

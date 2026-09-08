@@ -20,4 +20,5 @@ class BPCHECKCORE_API FAnalyzer
 {
 public:
 	static void Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
+	static void Analyze(UBlueprint* Blueprint);
 };
