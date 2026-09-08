@@ -69,6 +69,8 @@ int32 UBPCheckCommandlet::Main(const FString& String)
 	TArray<FAssetData> FoundAssets;
 	AssetRegistry.GetAssetsByClass(UBlueprint::StaticClass()->GetClassPathName(), FoundAssets);
 
+	TArray<FAnalyzerResult> Results;
+
 	for (const auto& AssetData : FoundAssets)
 	{
 		if (!AssetData.GetPackage()->GetName().StartsWith("/Game/"))
@@ -78,14 +80,23 @@ int32 UBPCheckCommandlet::Main(const FString& String)
 		}
 
 		UBlueprint* AssetObject = Cast<UBlueprint>(AssetData.GetAsset());
-		FAnalyzerResult Result = FAnalyzer::Analyze(AssetObject);
 
-		/*FString Json;
-		TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
-			TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Json);
-		FJsonSerializer::Serialize(FJsonObjectConverter::UStructToJsonObject(Result).ToSharedRef(), Writer);
-		UE_LOG(LogBPCheckEditor, Log, TEXT("%s"), *Json);*/
+		if (!AssetObject)
+		{
+			continue;
+		}
+
+		Results.Push(FAnalyzer::Analyze(AssetObject));
 	}
+
+	FAnalyzerReport Report;
+	Report.Results = MoveTemp(Results);
+
+	FString Json;
+	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+		TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Json);
+	FJsonSerializer::Serialize(FJsonObjectConverter::UStructToJsonObject(Report).ToSharedRef(), Writer);
+	UE_LOG(LogBPCheckEditor, Log, TEXT("%s"), *Json);
 
 	return 0;
 }

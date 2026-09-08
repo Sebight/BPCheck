@@ -16,6 +16,7 @@ public:
 	virtual void ShutdownModule() override;
 };
 
+
 USTRUCT()
 struct FAnalyzerResult
 {
@@ -28,6 +29,14 @@ struct FAnalyzerResult
 	FString Message;
 };
 
+USTRUCT()
+struct FAnalyzerReport
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FAnalyzerResult> Results;
+};
 
 class BPCHECKCORE_API FAnalyzer
 {
