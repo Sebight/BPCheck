@@ -60,7 +60,7 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 
 int32 UBPCheckCommandlet::Main(const FString& String)
 {
-	UE_LOG(LogBPCheckEditor, Log, TEXT("Running Commandlet."));
+	UE_LOG(LogBPCheckEditor, Log, TEXT("Running BPCheck Commandlet."));
 
 	auto& AssetRegistryMod = FModuleManager::Get().LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 	auto& AssetRegistry = AssetRegistryMod.Get();
