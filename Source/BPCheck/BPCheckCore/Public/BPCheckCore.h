@@ -44,7 +44,6 @@ struct FAnalyzerReport
 class BPCHECKCORE_API FAnalyzer
 {
 public:
-
 	static FAnalyzerResult Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
 	static FAnalyzerResult Analyze(UBlueprint* Blueprint);
 };

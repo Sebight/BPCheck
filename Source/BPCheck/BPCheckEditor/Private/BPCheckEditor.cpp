@@ -59,6 +59,7 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }
 
+// Run using "unreal_bin" "project_path" -run=BPCheck -NoShaderCompile -AllowStdOutLogVerbosity 2>&1 | Select-String "BPCheck"
 int32 UBPCheckCommandlet::Main(const FString& String)
 {
 	UE_LOG(LogBPCheckEditor, Log, TEXT("Running BPCheck Commandlet."));
