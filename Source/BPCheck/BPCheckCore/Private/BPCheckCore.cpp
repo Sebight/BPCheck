@@ -16,14 +16,16 @@ void FBPCheckCoreModule::ShutdownModule()
 
 }
 
-void FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
+FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
 {
-	Analyze(CompilationContext.Blueprint);
+	return Analyze(CompilationContext.Blueprint);
 }
 
-void FAnalyzer::Analyze(UBlueprint* Blueprint)
+FAnalyzerResult FAnalyzer::Analyze(UBlueprint* Blueprint)
 {
 	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *Blueprint->GetName());
+
+	return { true, "BPCheck ran successfully." };
 }
 
 #undef LOCTEXT_NAMESPACE

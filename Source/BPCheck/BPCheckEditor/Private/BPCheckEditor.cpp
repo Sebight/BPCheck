@@ -5,6 +5,7 @@
 #include "BPCheckCore.h"
 #include "BlueprintCompilationManager.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "JsonObjectConverter.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -77,7 +78,13 @@ int32 UBPCheckCommandlet::Main(const FString& String)
 		}
 
 		UBlueprint* AssetObject = Cast<UBlueprint>(AssetData.GetAsset());
-		FAnalyzer::Analyze(AssetObject);
+		FAnalyzerResult Result = FAnalyzer::Analyze(AssetObject);
+
+		/*FString Json;
+		TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer =
+			TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Json);
+		FJsonSerializer::Serialize(FJsonObjectConverter::UStructToJsonObject(Result).ToSharedRef(), Writer);
+		UE_LOG(LogBPCheckEditor, Log, TEXT("%s"), *Json);*/
 	}
 
 	return 0;

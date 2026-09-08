@@ -3,7 +3,7 @@
 #pragma once
 
 #include "BlueprintCompilerExtension.h"
-#include "Modules/ModuleManager.h"
+#include "BPCheckCore.generated.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogBPCheckCore, Log, All);
 
@@ -16,9 +16,23 @@ public:
 	virtual void ShutdownModule() override;
 };
 
+USTRUCT()
+struct FAnalyzerResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	bool Success = false;
+
+	UPROPERTY()
+	FString Message;
+};
+
+
 class BPCHECKCORE_API FAnalyzer
 {
 public:
-	static void Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
-	static void Analyze(UBlueprint* Blueprint);
+
+	static FAnalyzerResult Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
+	static FAnalyzerResult Analyze(UBlueprint* Blueprint);
 };
