@@ -28,21 +28,22 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	UEdGraphNode* TickNode = FindTick(Blueprint);
 
 	if (!TickNode) return Fail(Blueprint, "Tick not found.");
+	TFunction<void(UEdGraphNode*)> WalkNode;
+	WalkNode = [&WalkNode](UEdGraphNode* Node)
+		{
+			UE_LOG(LogBPCheckCore, Log, TEXT("Walked: %s(%s)"), *Node->GetName(), *Node->GetNodeTitle(ENodeTitleType::ListView).ToString());
+			auto NextNodes = GetNextExecNode(Node);
+
+			for (auto& NextNode : NextNodes)
+			{
+				WalkNode(NextNode);
+			}
+		};
 
 	UEdGraphNode* Current = TickNode;
-	while (Current)
-	{
-		UE_LOG(LogBPCheckCore, Log, TEXT("Walked: %s"), *Current->GetName());
+	WalkNode(Current);
 
-		Current = GetNextExecNode(Current);
-	}
-
-	FAnalyzerResult Result;
-	Result.BlueprintName = Blueprint->GetName();
-	Result.Success = true;
-	Result.Message = "no suggestions";
-
-	return Result;
+	return Ok(Blueprint, "no suggestions");
 }
 
 UEdGraphNode* FAnalyzer::FindTick(const UBlueprint* Blueprint)
@@ -60,24 +61,10 @@ UEdGraphNode* FAnalyzer::FindTick(const UBlueprint* Blueprint)
 	return nullptr;
 }
 
-UEdGraphNode* FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode)
+TArray<UEdGraphNode*> FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode)
 {
-	// TODO(Seb): This is a temporary (wasteful) warning
-	int8 NumberOfOutputPins = 0;
-	for (auto Pin : CurrentNode->Pins)
-	{
-		if (Pin->Direction == EGPD_Output && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
-		{
-			NumberOfOutputPins++;
-		}
-	}
+	TArray<UEdGraphNode*> Out;
 
-	if (NumberOfOutputPins > 1)
-	{
-		UE_LOG(LogBPCheckCore, Warning, TEXT("Nodes with multiple output pins are not supported."));
-	}
-
-	// WARNING: This is for now only the first output pin
 	for (auto Pin : CurrentNode->Pins)
 	{
 		if (Pin->Direction == EGPD_Output && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
@@ -86,11 +73,12 @@ UEdGraphNode* FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode)
 
 			if (LinkedToCount == 0) continue;
 
-			return Pin->LinkedTo[0]->GetOwningNode();
+			// Note(Seb): I think assuming 0 here is okay, since the output execution pin can only go to one?
+			Out.Push(Pin->LinkedTo[0]->GetOwningNode());
 		}
 	}
 
-	return nullptr;
+	return Out;
 }
 
 FAnalyzerResult FAnalyzer::Fail(const UBlueprint* Blueprint, const FString& Reason)
@@ -99,6 +87,16 @@ FAnalyzerResult FAnalyzer::Fail(const UBlueprint* Blueprint, const FString& Reas
 	Result.BlueprintName = Blueprint->GetName();
 	Result.Success = false;
 	Result.Message = Reason.IsEmpty() ? "unknown reason" : Reason;
+
+	return Result;
+}
+
+FAnalyzerResult FAnalyzer::Ok(const UBlueprint* Blueprint, const FString& Message)
+{
+	FAnalyzerResult Result;
+	Result.BlueprintName = Blueprint->GetName();
+	Result.Success = true;
+	Result.Message = Message.IsEmpty() ? "unknown reason" : Message;
 
 	return Result;
 }

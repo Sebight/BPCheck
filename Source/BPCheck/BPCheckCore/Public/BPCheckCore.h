@@ -49,7 +49,8 @@ public:
 
 private:
 	static UEdGraphNode* FindTick(const UBlueprint* Blueprint);
-	static UEdGraphNode* GetNextExecNode(const UEdGraphNode* CurrentNode);
+	static TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
 
 	static FAnalyzerResult Fail(const UBlueprint* Blueprint, const FString& Reason);
+	static FAnalyzerResult Ok(const UBlueprint* Blueprint, const FString& Message);
 };
