@@ -2,6 +2,8 @@
 
 #include "BPCheckCore.h"
 
+#include "K2Node_DynamicCast.h"
+
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
 DEFINE_LOG_CATEGORY(LogBPCheckCore);
@@ -27,11 +29,19 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 
 	UEdGraphNode* TickNode = FindTick(Blueprint);
 
+	TArray<FString> Suggestions;
+
 	if (!TickNode) return Fail(Blueprint, "Tick not found.");
 	TFunction<void(UEdGraphNode*)> WalkNode;
-	WalkNode = [&WalkNode](UEdGraphNode* Node)
+	WalkNode = [&WalkNode, &Suggestions](UEdGraphNode* Node)
 		{
 			UE_LOG(LogBPCheckCore, Log, TEXT("Walked: %s(%s)"), *Node->GetName(), *Node->GetNodeTitle(ENodeTitleType::ListView).ToString());
+
+			if (Cast<UK2Node_DynamicCast>(Node))
+			{
+				Suggestions.Push("Using cast.");
+			}
+
 			auto NextNodes = GetNextExecNode(Node);
 
 			for (auto& NextNode : NextNodes)
@@ -43,7 +53,7 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	UEdGraphNode* Current = TickNode;
 	WalkNode(Current);
 
-	return Ok(Blueprint, "no suggestions");
+	return Ok(Blueprint, FString::Join(Suggestions, TEXT(", ")));
 }
 
 UEdGraphNode* FAnalyzer::FindTick(const UBlueprint* Blueprint)
