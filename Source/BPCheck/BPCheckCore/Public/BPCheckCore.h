@@ -45,5 +45,12 @@ class BPCHECKCORE_API FAnalyzer
 {
 public:
 	static FAnalyzerResult Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
-	static FAnalyzerResult Analyze(UBlueprint* Blueprint);
+	static FAnalyzerResult Analyze(const UBlueprint* Blueprint);
+
+private:
+	static UEdGraphNode* FindTick(const UBlueprint* Blueprint);
+	static TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
+
+	static FAnalyzerResult Fail(const UBlueprint* Blueprint, const FString& Reason);
+	static FAnalyzerResult Ok(const UBlueprint* Blueprint, const FString& Message);
 };

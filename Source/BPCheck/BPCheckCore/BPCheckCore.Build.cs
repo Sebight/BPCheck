@@ -38,7 +38,8 @@ public class BPCheckCore : ModuleRules
 				"Engine",
 				"UnrealEd",
 				"Kismet",
-				"KismetCompiler"
+				"KismetCompiler",
+                "BlueprintGraph"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

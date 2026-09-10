@@ -55,7 +55,9 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		return;
 	}
 
-	FAnalyzer::Analyze(CompilationContext, Data);
+	auto Result = FAnalyzer::Analyze(CompilationContext, Data);
+	UE_LOG(LogBPCheckEditor, Log, TEXT("Processed Blueprint %s with result: %d. (%s)"), *Result.BlueprintName, Result.Success, *Result.Message);
+
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }
 
