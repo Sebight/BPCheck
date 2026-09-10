@@ -55,8 +55,10 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		return;
 	}
 
-	auto Result = FAnalyzer::Analyze(CompilationContext, Data);
-	UE_LOG(LogBPCheckEditor, Log, TEXT("Processed Blueprint %s with result: %d. (%s)"), *Result.BlueprintName, Result.Success, *Result.Message);
+	FAnalyzer Analyzer;
+	auto [BlueprintName, Message, Success] = Analyzer.Analyze(CompilationContext, Data);
+
+	UE_LOG(LogBPCheckEditor, Log, TEXT("Processed Blueprint %s with result: %d. (%s)"), *BlueprintName, Success, *Message);
 
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }
@@ -89,7 +91,8 @@ int32 UBPCheckCommandlet::Main(const FString& String)
 			continue;
 		}
 
-		Results.Push(FAnalyzer::Analyze(AssetObject));
+		FAnalyzer Analyzer;
+		Results.Push(Analyzer.Analyze(AssetObject));
 	}
 
 	FAnalyzerReport Report;

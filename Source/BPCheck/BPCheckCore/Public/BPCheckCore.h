@@ -44,13 +44,13 @@ struct FAnalyzerReport
 class BPCHECKCORE_API FAnalyzer
 {
 public:
-	static FAnalyzerResult Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
-	static FAnalyzerResult Analyze(const UBlueprint* Blueprint);
+	FAnalyzerResult Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
+	FAnalyzerResult Analyze(const UBlueprint* Blueprint);
 
 private:
-	static UEdGraphNode* FindTick(const UBlueprint* Blueprint);
-	static TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
+	UEdGraphNode* FindTick(const UBlueprint* Blueprint);
+	TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
 
-	static FAnalyzerResult Fail(const UBlueprint* Blueprint, const FString& Reason);
-	static FAnalyzerResult Ok(const UBlueprint* Blueprint, const FString& Message);
+	FAnalyzerResult Fail(const UBlueprint* Blueprint, const FString& Reason);
+	FAnalyzerResult Ok(const UBlueprint* Blueprint, const FString& Message);
 };

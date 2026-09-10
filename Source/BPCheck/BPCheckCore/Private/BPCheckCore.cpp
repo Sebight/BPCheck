@@ -33,7 +33,7 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 
 	if (!TickNode) return Fail(Blueprint, "Tick not found.");
 	TFunction<void(UEdGraphNode*)> WalkNode;
-	WalkNode = [&WalkNode, &Suggestions](UEdGraphNode* Node)
+	WalkNode = [&WalkNode, &Suggestions, this](UEdGraphNode* Node)
 		{
 			UE_LOG(LogBPCheckCore, Log, TEXT("Walked: %s(%s)"), *Node->GetName(), *Node->GetNodeTitle(ENodeTitleType::ListView).ToString());
 
