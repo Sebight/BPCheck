@@ -2,7 +2,9 @@
 
 #include "BPCheckCore.h"
 
+#include "K2Node_CallFunction.h"
 #include "K2Node_DynamicCast.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -18,6 +20,30 @@ void FBPCheckCoreModule::ShutdownModule()
 
 }
 
+void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions)
+{
+	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
+
+	if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
+	{
+		if (Call->GetTargetFunction() == PrintStringFn)
+		{
+			// TODO(Seb): Check with Context
+			// if (Context.IsInHotPath(Call->NodeGuid))
+
+			Suggestions.Push({
+				ESuggestion::PrintInHotPath,
+				Call->GetNodeTitle(ENodeTitleType::FullTitle).ToString()
+				});
+		}
+	}
+}
+
+FAnalyzer::FAnalyzer()
+{
+	Rules.Push(MakeUnique<FPrintInHotPathRule>());
+}
+
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
 {
 	return Analyze(CompilationContext.Blueprint);
@@ -27,33 +53,28 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 {
 	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *Blueprint->GetName());
 
-	UEdGraphNode* TickNode = FindTick(Blueprint);
-
-	TArray<FString> Suggestions;
-
-	if (!TickNode) return Fail(Blueprint, "Tick not found.");
-	TFunction<void(UEdGraphNode*)> WalkNode;
-	WalkNode = [&WalkNode, &Suggestions](UEdGraphNode* Node)
+	TArray<FSuggestionContext> Suggestions;
+	for (auto& Page : Blueprint->UbergraphPages)
+	{
+		for (auto Node : Page->Nodes)
 		{
-			UE_LOG(LogBPCheckCore, Log, TEXT("Walked: %s(%s)"), *Node->GetName(), *Node->GetNodeTitle(ENodeTitleType::ListView).ToString());
+			if (IsDead(Node)) continue;
 
-			if (Cast<UK2Node_DynamicCast>(Node))
+			for (const auto& Rule : Rules)
 			{
-				Suggestions.Push("Using cast.");
+				Rule->Check(Node, Suggestions);
 			}
+		}
+	}
 
-			auto NextNodes = GetNextExecNode(Node);
+	TArray<FString> Descriptions;
+	for (auto& SuggestionContext : Suggestions)
+	{
+		auto& Info = GetSuggestionInfo(SuggestionContext.Suggestion);
+		Descriptions.Push(FString::Printf(TEXT("(%s) %s"), *Info.SuggestionCode, *Info.SuggestionDescription));
+	}
 
-			for (auto& NextNode : NextNodes)
-			{
-				WalkNode(NextNode);
-			}
-		};
-
-	UEdGraphNode* Current = TickNode;
-	WalkNode(Current);
-
-	return Ok(Blueprint, FString::Join(Suggestions, TEXT(", ")));
+	return Ok(Blueprint, FString::Join(Descriptions, TEXT(", ")));
 }
 
 UEdGraphNode* FAnalyzer::FindTick(const UBlueprint* Blueprint)
@@ -89,6 +110,19 @@ TArray<UEdGraphNode*> FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode
 	}
 
 	return Out;
+}
+
+bool FAnalyzer::IsDead(const UEdGraphNode* Node)
+{
+	// TODO(Seb): This function is reliable for a single node, but breaks for chains. I think this should be part of the context-build in the future.
+	for (auto Pin : Node->Pins) {
+		if (Pin->Direction == EGPD_Input && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
+		{
+			return Pin->LinkedTo.Num() == 0;
+		}
+	}
+
+	return false;
 }
 
 FAnalyzerResult FAnalyzer::Fail(const UBlueprint* Blueprint, const FString& Reason)

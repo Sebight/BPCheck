@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "Suggestions.h"
 #include "BlueprintCompilerExtension.h"
 #include "BPCheckCore.generated.h"
 
@@ -41,16 +42,48 @@ struct FAnalyzerReport
 	TArray<FAnalyzerResult> Results;
 };
 
+struct FSuggestionContext
+{
+	ESuggestion Suggestion;
+	// TODO(Seb): Provide a reliable link to the node, so that it can be clicked and navigated to
+	FString NodeName;
+};
+
+class BPCHECKCORE_API FAnalysisRule
+{
+public:
+	FAnalysisRule() = default;
+	virtual ~FAnalysisRule() = default;
+	virtual void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions) = 0;
+};
+
+class BPCHECKCORE_API FPrintInHotPathRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions) override;
+};
+
 class BPCHECKCORE_API FAnalyzer
 {
 public:
-	static FAnalyzerResult Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
-	static FAnalyzerResult Analyze(const UBlueprint* Blueprint);
+	FAnalyzer();
+	FAnalyzer(const FAnalyzer&) = delete;
+	FAnalyzer& operator=(const FAnalyzer&) = delete;
+	FAnalyzer(FAnalyzer&&) = default;
+	FAnalyzer& operator=(FAnalyzer&&) = default;
+
+	FAnalyzerResult Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
+	FAnalyzerResult Analyze(const UBlueprint* Blueprint);
 
 private:
-	static UEdGraphNode* FindTick(const UBlueprint* Blueprint);
-	static TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
+	// I think these could be static'd and moved into a namespace
+	UEdGraphNode* FindTick(const UBlueprint* Blueprint);
+	TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
+	static bool IsDead(const UEdGraphNode* Node);
 
-	static FAnalyzerResult Fail(const UBlueprint* Blueprint, const FString& Reason);
-	static FAnalyzerResult Ok(const UBlueprint* Blueprint, const FString& Message);
+	FAnalyzerResult Fail(const UBlueprint* Blueprint, const FString& Reason);
+	FAnalyzerResult Ok(const UBlueprint* Blueprint, const FString& Message);
+
+private:
+	TArray<TUniquePtr<FAnalysisRule>> Rules;
 };

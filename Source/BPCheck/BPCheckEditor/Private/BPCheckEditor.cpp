@@ -6,6 +6,7 @@
 #include "BlueprintCompilationManager.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "JsonObjectConverter.h"
+#include "ProfilingDebugging/ScopedTimers.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -55,8 +56,15 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		return;
 	}
 
-	auto Result = FAnalyzer::Analyze(CompilationContext, Data);
-	UE_LOG(LogBPCheckEditor, Log, TEXT("Processed Blueprint %s with result: %d. (%s)"), *Result.BlueprintName, Result.Success, *Result.Message);
+	double Seconds = 0.0;
+	FAnalyzerResult Result;
+	{
+		FScopedDurationTimer Timer(Seconds);
+		FAnalyzer Analyzer;
+		Result = Analyzer.Analyze(CompilationContext, Data);
+	}
+	UE_LOG(LogBPCheckEditor, Log, TEXT("Processed Blueprint %s with result: %d. (%s) Took  %.3f ms"), *Result.BlueprintName, Result.Success, *Result.Message, Seconds * 1000.0f);
+
 
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }
@@ -89,7 +97,8 @@ int32 UBPCheckCommandlet::Main(const FString& String)
 			continue;
 		}
 
-		Results.Push(FAnalyzer::Analyze(AssetObject));
+		FAnalyzer Analyzer;
+		Results.Push(Analyzer.Analyze(AssetObject));
 	}
 
 	FAnalyzerReport Report;
