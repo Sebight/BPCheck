@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "Suggestions.h"
 #include "BlueprintCompilerExtension.h"
 #include "BPCheckCore.generated.h"
 
@@ -41,9 +42,36 @@ struct FAnalyzerReport
 	TArray<FAnalyzerResult> Results;
 };
 
+struct FSuggestionContext
+{
+	ESuggestion Suggestion;
+	// TODO(Seb): Provide a reliable link to the node, so that it can be clicked and navigated to
+	FString NodeName;
+};
+
+class BPCHECKCORE_API FAnalysisRule
+{
+public:
+	FAnalysisRule() = default;
+	virtual ~FAnalysisRule() = default;
+	virtual void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions) = 0;
+};
+
+class BPCHECKCORE_API FPrintInHotPathRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions) override;
+};
+
 class BPCHECKCORE_API FAnalyzer
 {
 public:
+	FAnalyzer();
+	FAnalyzer(const FAnalyzer&) = delete;
+	FAnalyzer& operator=(const FAnalyzer&) = delete;
+	FAnalyzer(FAnalyzer&&) = default;
+	FAnalyzer& operator=(FAnalyzer&&) = default;
+
 	FAnalyzerResult Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
 	FAnalyzerResult Analyze(const UBlueprint* Blueprint);
 
@@ -53,4 +81,7 @@ private:
 
 	FAnalyzerResult Fail(const UBlueprint* Blueprint, const FString& Reason);
 	FAnalyzerResult Ok(const UBlueprint* Blueprint, const FString& Message);
+
+private:
+	TArray<TUniquePtr<FAnalysisRule>> Rules;
 };
