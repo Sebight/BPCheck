@@ -76,8 +76,10 @@ public:
 	FAnalyzerResult Analyze(const UBlueprint* Blueprint);
 
 private:
+	// I think these could be static'd and moved into a namespace
 	UEdGraphNode* FindTick(const UBlueprint* Blueprint);
 	TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
+	static bool IsDead(const UEdGraphNode* Node);
 
 	FAnalyzerResult Fail(const UBlueprint* Blueprint, const FString& Reason);
 	FAnalyzerResult Ok(const UBlueprint* Blueprint, const FString& Message);

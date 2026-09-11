@@ -58,6 +58,8 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	{
 		for (auto Node : Page->Nodes)
 		{
+			if (IsDead(Node)) continue;
+
 			for (const auto& Rule : Rules)
 			{
 				Rule->Check(Node, Suggestions);
@@ -108,6 +110,19 @@ TArray<UEdGraphNode*> FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode
 	}
 
 	return Out;
+}
+
+bool FAnalyzer::IsDead(const UEdGraphNode* Node)
+{
+	// TODO(Seb): This function is reliable for a single node, but breaks for chains. I think this should be part of the context-build in the future.
+	for (auto Pin : Node->Pins) {
+		if (Pin->Direction == EGPD_Input && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
+		{
+			return Pin->LinkedTo.Num() == 0;
+		}
+	}
+
+	return false;
 }
 
 FAnalyzerResult FAnalyzer::Fail(const UBlueprint* Blueprint, const FString& Reason)
