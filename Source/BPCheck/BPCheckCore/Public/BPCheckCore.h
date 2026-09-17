@@ -17,6 +17,14 @@ public:
 	virtual void ShutdownModule() override;
 };
 
+USTRUCT()
+struct FSuggestionContext
+{
+	GENERATED_BODY()
+
+	ESuggestion Suggestion;
+	FGuid NodeId;
+};
 
 USTRUCT()
 struct FAnalyzerResult
@@ -24,10 +32,7 @@ struct FAnalyzerResult
 	GENERATED_BODY()
 
 	UPROPERTY()
-	FString BlueprintName;
-
-	UPROPERTY()
-	FString Message;
+	TArray<FSuggestionContext> Suggestions;
 
 	UPROPERTY()
 	bool Success = false;
@@ -40,13 +45,6 @@ struct FAnalyzerReport
 
 	UPROPERTY()
 	TArray<FAnalyzerResult> Results;
-};
-
-struct FSuggestionContext
-{
-	ESuggestion Suggestion;
-	// TODO(Seb): Provide a reliable link to the node, so that it can be clicked and navigated to
-	FString NodeName;
 };
 
 class BPCHECKCORE_API FAnalysisRule
@@ -80,10 +78,5 @@ private:
 	UEdGraphNode* FindTick(const UBlueprint* Blueprint);
 	TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
 	static bool IsDead(const UEdGraphNode* Node);
-
-	FAnalyzerResult Fail(const UBlueprint* Blueprint, const FString& Reason);
-	FAnalyzerResult Ok(const UBlueprint* Blueprint, const FString& Message);
-
-private:
 	TArray<TUniquePtr<FAnalysisRule>> Rules;
 };

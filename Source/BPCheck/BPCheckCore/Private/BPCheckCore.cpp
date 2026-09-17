@@ -33,7 +33,7 @@ void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCont
 
 			Suggestions.Push({
 				ESuggestion::PrintInHotPath,
-				Call->GetNodeTitle(ENodeTitleType::FullTitle).ToString()
+				Call->NodeGuid
 				});
 		}
 	}
@@ -74,7 +74,11 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 		Descriptions.Push(FString::Printf(TEXT("(%s) %s"), *Info.SuggestionCode, *Info.SuggestionDescription));
 	}
 
-	return Ok(Blueprint, FString::Join(Descriptions, TEXT(", ")));
+	FAnalyzerResult Result;
+	Result.Success = true;
+	Result.Suggestions = MoveTemp(Suggestions);
+
+	return Result;
 }
 
 UEdGraphNode* FAnalyzer::FindTick(const UBlueprint* Blueprint)
@@ -123,26 +127,6 @@ bool FAnalyzer::IsDead(const UEdGraphNode* Node)
 	}
 
 	return false;
-}
-
-FAnalyzerResult FAnalyzer::Fail(const UBlueprint* Blueprint, const FString& Reason)
-{
-	FAnalyzerResult Result;
-	Result.BlueprintName = Blueprint->GetName();
-	Result.Success = false;
-	Result.Message = Reason.IsEmpty() ? "unknown reason" : Reason;
-
-	return Result;
-}
-
-FAnalyzerResult FAnalyzer::Ok(const UBlueprint* Blueprint, const FString& Message)
-{
-	FAnalyzerResult Result;
-	Result.BlueprintName = Blueprint->GetName();
-	Result.Success = true;
-	Result.Message = Message.IsEmpty() ? "unknown reason" : Message;
-
-	return Result;
 }
 
 #undef LOCTEXT_NAMESPACE

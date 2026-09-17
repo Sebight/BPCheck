@@ -63,8 +63,7 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		FAnalyzer Analyzer;
 		Result = Analyzer.Analyze(CompilationContext, Data);
 	}
-	UE_LOG(LogBPCheckEditor, Log, TEXT("Processed Blueprint %s with result: %d. (%s) Took  %.3f ms"), *Result.BlueprintName, Result.Success, *Result.Message, Seconds * 1000.0f);
-
+	// UE_LOG(LogBPCheckEditor, Log, TEXT("Processed Blueprint %s with result: %d. (%s) Took  %.3f ms"), *Result.BlueprintName, Result.Success, *Result.Message, Seconds * 1000.0f);
 
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }
