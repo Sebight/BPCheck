@@ -7,6 +7,10 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "JsonObjectConverter.h"
 #include "ProfilingDebugging/ScopedTimers.h"
+#include "Logging/MessageLog.h"
+#include "Logging/TokenizedMessage.h"
+#include "Misc/UObjectToken.h"
+#include "Kismet2/KismetEditorUtilities.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -88,6 +92,25 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		{
 			// Couldn't properly resolve the reported node? Should probably warn...
 		}
+
+		const FSuggestionInfo& Info = GetSuggestionInfo(Suggestion.Suggestion);
+
+
+		TSharedRef<FTokenizedMessage> Msg = FTokenizedMessage::Create(EMessageSeverity::Warning);
+		Msg->AddToken(FTextToken::Create(FText::FromString(Info.SuggestionCode)));
+
+		// Note(Seb): I wasn't able to make it work without adding the Callback, which forces the open in the node editor...
+		Msg->AddToken(FUObjectToken::Create(Node, Node->GetNodeTitle(ENodeTitleType::ListView))->OnMessageTokenActivated(
+			FOnMessageTokenActivated::CreateLambda([](const TSharedRef<IMessageToken>& Token)
+				{
+					const TSharedRef<FUObjectToken> Obj = StaticCastSharedRef<FUObjectToken>(Token);
+					if (UObject* Resolved = Obj->GetObject().Get())
+						FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(Resolved);
+				})));
+
+		Msg->AddToken(FTextToken::Create(FText::FromString(Info.SuggestionDescription)));
+
+		FMessageLog("BPCheck").AddMessage(Msg);
 	}
 
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
