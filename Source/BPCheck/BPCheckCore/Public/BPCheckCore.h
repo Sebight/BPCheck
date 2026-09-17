@@ -23,7 +23,7 @@ struct FSuggestionContext
 	GENERATED_BODY()
 
 	ESuggestion Suggestion;
-	FGuid NodeId;
+	FGuid NodeGuid;
 };
 
 USTRUCT()

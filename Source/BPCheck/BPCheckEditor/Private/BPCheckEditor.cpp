@@ -12,6 +12,22 @@
 
 DEFINE_LOG_CATEGORY(LogBPCheckEditor);
 
+UEdGraphNode* BPCheck::Editor::ResolveNode(const UBlueprint* Blueprint, FGuid NodeGuid)
+{
+	TArray<UEdGraph*> Graphs;
+	Blueprint->GetAllGraphs(Graphs);
+
+	for (auto* Graph : Graphs)
+	{
+		for (auto Node : Graph->Nodes)
+		{
+			if (Node->NodeGuid == NodeGuid) return Node;
+		}
+	}
+
+	return nullptr;
+}
+
 void FBPCheckEditorModule::StartupModule()
 {
 	UE_LOG(LogBPCheckEditor, Log, TEXT("BPCheck-Editor started."));
@@ -63,7 +79,16 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		FAnalyzer Analyzer;
 		Result = Analyzer.Analyze(CompilationContext, Data);
 	}
-	// UE_LOG(LogBPCheckEditor, Log, TEXT("Processed Blueprint %s with result: %d. (%s) Took  %.3f ms"), *Result.BlueprintName, Result.Success, *Result.Message, Seconds * 1000.0f);
+
+
+	for (auto& Suggestion : Result.Suggestions)
+	{
+		UEdGraphNode* Node = BPCheck::Editor::ResolveNode(CompilationContext.Blueprint, Suggestion.NodeGuid);
+		if (!Node)
+		{
+			// Couldn't properly resolve the reported node? Should probably warn...
+		}
+	}
 
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }

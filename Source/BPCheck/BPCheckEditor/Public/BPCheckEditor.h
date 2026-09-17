@@ -10,6 +10,11 @@
 
 DECLARE_LOG_CATEGORY_EXTERN(LogBPCheckEditor, Log, All);
 
+namespace BPCheck::Editor
+{
+	UEdGraphNode* ResolveNode(const UBlueprint* Blueprint, FGuid NodeGuid);
+}
+
 class FBPCheckEditorModule : public IModuleInterface
 {
 public:
