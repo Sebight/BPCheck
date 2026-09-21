@@ -6,8 +6,11 @@
 #include "BlueprintCompilerExtension.h"
 #include "Commandlets/Commandlet.h"
 
+#include "BPCheckCore.h"
+
 #include "BPCheckEditor.generated.h"
 
+struct FResultTreeItem;
 DECLARE_LOG_CATEGORY_EXTERN(LogBPCheckEditor, Log, All);
 
 namespace BPCheck::Editor
@@ -15,6 +18,7 @@ namespace BPCheck::Editor
 	UEdGraphNode* ResolveNode(const UBlueprint* Blueprint, FGuid NodeGuid);
 }
 
+class SBPCheckSuggestionsPanel;
 class FBPCheckEditorModule : public IModuleInterface
 {
 public:
@@ -25,13 +29,20 @@ public:
 	void CreateMenuItem();
 	void OnButtonClicked();
 
+	void SetSuggestionsForBlueprint(const UBlueprint* Blueprint, TArray<FSuggestionContext>& NewSuggestions);
+
 private:
 	TSharedRef<SDockTab> CreateSuggestionsTab(const FSpawnTabArgs&);
+	TArray<TSharedPtr<FResultTreeItem>> BuildTree() const;
+
+	TWeakPtr<SBPCheckSuggestionsPanel> SuggestionsPanel;
+	TMap<const UBlueprint*, TArray<FSuggestionContext>> Suggestions;
 };
 
 struct FResultTreeItem
 {
 	FString Label;
+	TWeakObjectPtr<UEdGraphNode> Node;
 	TArray<TSharedPtr<FResultTreeItem>> Children;
 };
 
@@ -51,6 +62,8 @@ private:
 
 	TArray<TSharedPtr<FResultTreeItem>> RootNodes;
 	TSharedPtr<STreeView<TSharedPtr<FResultTreeItem>>> TreeView;
+
+	void OnItemDoubleClicked(TSharedPtr<FResultTreeItem> Item);
 };
 
 UCLASS()

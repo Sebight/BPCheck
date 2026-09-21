@@ -63,19 +63,59 @@ void FBPCheckEditorModule::CreateMenuItem()
 	Section.AddEntry(FToolMenuEntry::InitToolBarButton(
 		"BPCheckButton",
 		FUIAction(FExecuteAction::CreateRaw(this, &FBPCheckEditorModule::OnButtonClicked)),
-		LOCTEXT("BPCheckLabel", "BP Check"),
-		LOCTEXT("BPCheckTooltip", "Run blueprint checks"),
+		LOCTEXT("BPCheckLabel", "BPCheck"),
+		LOCTEXT("BPCheckTooltip", "See BPCheck Suggestions"),
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.ViewOptions")
 	));
 }
 
 void FBPCheckEditorModule::OnButtonClicked()
 {
+	FGlobalTabmanager::Get()->TryInvokeTab(BPCheckTabId);
+}
+
+void FBPCheckEditorModule::SetSuggestionsForBlueprint(const UBlueprint* Blueprint, TArray<FSuggestionContext>& NewSuggestions)
+{
+	Suggestions.Add(Blueprint, MoveTemp(NewSuggestions));
+
+	if (TSharedPtr<SBPCheckSuggestionsPanel> P = SuggestionsPanel.Pin())
+	{
+		P->SetResults(BuildTree());
+	}
 }
 
 TSharedRef<SDockTab> FBPCheckEditorModule::CreateSuggestionsTab(const FSpawnTabArgs&)
 {
-	return SNew(SDockTab).TabRole(NomadTab)[SNew(SBPCheckSuggestionsPanel)];
+	TSharedRef<SBPCheckSuggestionsPanel> Panel = SNew(SBPCheckSuggestionsPanel);
+	SuggestionsPanel = Panel;
+	Panel->SetResults(BuildTree());
+	return SNew(SDockTab).TabRole(NomadTab)[Panel];
+}
+
+TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
+{
+	TArray<TSharedPtr<FResultTreeItem>> Roots;
+
+	for (const auto& Pair : Suggestions)
+	{
+		const UBlueprint* BP = Pair.Key;
+		if (!BP || Pair.Value.Num() == 0) continue;
+
+		TSharedPtr<FResultTreeItem> Group = MakeShared<FResultTreeItem>();
+		Group->Label = FString::Printf(TEXT("%s (%d)"), *BP->GetName(), Pair.Value.Num());
+
+		for (const FSuggestionContext& S : Pair.Value)
+		{
+			const FSuggestionInfo& Info = GetSuggestionInfo(S.Suggestion);
+
+			TSharedPtr<FResultTreeItem> Leaf = MakeShared<FResultTreeItem>();
+			Leaf->Label = FString::Printf(TEXT("%s  %s"), *Info.SuggestionCode, *Info.SuggestionDescription);
+			Leaf->Node = BPCheck::Editor::ResolveNode(BP, S.NodeGuid);
+			Group->Children.Add(Leaf);
+		}
+		Roots.Add(Group);
+	}
+	return Roots;
 }
 
 void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
@@ -87,6 +127,7 @@ void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
 				.OnGenerateRow(this, &SBPCheckSuggestionsPanel::OnGenerateRow)
 				.OnGetChildren(this, &SBPCheckSuggestionsPanel::OnGetChildren)
 				.SelectionMode(ESelectionMode::Single)
+				.OnMouseButtonDoubleClick(this, &SBPCheckSuggestionsPanel::OnItemDoubleClicked)
 		];
 }
 
@@ -117,6 +158,14 @@ void SBPCheckSuggestionsPanel::OnGetChildren(TSharedPtr<FResultTreeItem> Node, T
 	{
 		OutChildren = Node->Children;
 	}
+}
+
+void SBPCheckSuggestionsPanel::OnItemDoubleClicked(TSharedPtr<FResultTreeItem> Item)
+{
+	if (!Item.IsValid()) return;
+
+	const UObject* Resolved = Item->Node.Get();
+	FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(Resolved);
 }
 
 void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
@@ -163,6 +212,8 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 
 		FMessageLog("BPCheck").AddMessage(Msg);
 	}
+
+	FModuleManager::GetModuleChecked<FBPCheckEditorModule>("BPCheckEditor").SetSuggestionsForBlueprint(CompilationContext.Blueprint, Result.Suggestions);
 
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }
