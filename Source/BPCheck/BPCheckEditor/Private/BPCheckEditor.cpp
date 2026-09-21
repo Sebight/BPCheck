@@ -16,6 +16,10 @@
 
 DEFINE_LOG_CATEGORY(LogBPCheckEditor);
 
+static const FName BPCheckTabId = "BPCheckSuggestions";
+
+class SBPCheckSuggestionsPanel;
+
 UEdGraphNode* BPCheck::Editor::ResolveNode(const UBlueprint* Blueprint, FGuid NodeGuid)
 {
 	TArray<UEdGraph*> Graphs;
@@ -39,6 +43,8 @@ void FBPCheckEditorModule::StartupModule()
 
 	UBPCompilerExtension* Extension = NewObject<UBPCompilerExtension>();
 	FBlueprintCompilationManager::RegisterCompilerExtension(UBlueprint::StaticClass(), Extension);
+
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(BPCheckTabId, FOnSpawnTab::CreateRaw(this, &FBPCheckEditorModule::CreateSuggestionsTab)).SetDisplayName(LOCTEXT("BPCheckSuggestionsList", "BPCheck Suggestions"));
 }
 
 void FBPCheckEditorModule::ShutdownModule()
@@ -65,6 +71,11 @@ void FBPCheckEditorModule::CreateMenuItem()
 
 void FBPCheckEditorModule::OnButtonClicked()
 {
+}
+
+TSharedRef<SDockTab> FBPCheckEditorModule::CreateSuggestionsTab(const FSpawnTabArgs&)
+{
+	return SNew(SDockTab).TabRole(ETabRole::NomadTab)/*[SNew(SBPCheckSuggestionsPanel)]*/;
 }
 
 void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)

@@ -24,6 +24,9 @@ public:
 
 	void CreateMenuItem();
 	void OnButtonClicked();
+
+private:
+	TSharedRef<SDockTab> CreateSuggestionsTab(const FSpawnTabArgs&);
 };
 
 UCLASS()
