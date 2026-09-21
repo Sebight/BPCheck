@@ -29,6 +29,30 @@ private:
 	TSharedRef<SDockTab> CreateSuggestionsTab(const FSpawnTabArgs&);
 };
 
+struct FResultTreeItem
+{
+	FString Label;
+	TArray<TSharedPtr<FResultTreeItem>> Children;
+};
+
+class SBPCheckSuggestionsPanel : public SCompoundWidget
+{
+public:
+	SLATE_BEGIN_ARGS(SBPCheckSuggestionsPanel) {}
+	SLATE_END_ARGS()
+
+	void Construct(const FArguments& InArgs);
+
+	void SetResults(TArray<TSharedPtr<FResultTreeItem>> InNodes);
+
+private:
+	TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FResultTreeItem> Node, const TSharedRef<STableViewBase>& Owner);
+	void OnGetChildren(TSharedPtr<FResultTreeItem> Node, TArray<TSharedPtr<FResultTreeItem>>& OutChildren);
+
+	TArray<TSharedPtr<FResultTreeItem>> RootNodes;
+	TSharedPtr<STreeView<TSharedPtr<FResultTreeItem>>> TreeView;
+};
+
 UCLASS()
 class BPCHECKEDITOR_API UBPCompilerExtension : public UBlueprintCompilerExtension
 {

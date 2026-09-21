@@ -75,7 +75,48 @@ void FBPCheckEditorModule::OnButtonClicked()
 
 TSharedRef<SDockTab> FBPCheckEditorModule::CreateSuggestionsTab(const FSpawnTabArgs&)
 {
-	return SNew(SDockTab).TabRole(ETabRole::NomadTab)/*[SNew(SBPCheckSuggestionsPanel)]*/;
+	return SNew(SDockTab).TabRole(NomadTab)[SNew(SBPCheckSuggestionsPanel)];
+}
+
+void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
+{
+	ChildSlot
+		[
+			SAssignNew(TreeView, STreeView<TSharedPtr<FResultTreeItem>>)
+				.TreeItemsSource(&RootNodes)
+				.OnGenerateRow(this, &SBPCheckSuggestionsPanel::OnGenerateRow)
+				.OnGetChildren(this, &SBPCheckSuggestionsPanel::OnGetChildren)
+				.SelectionMode(ESelectionMode::Single)
+		];
+}
+
+void SBPCheckSuggestionsPanel::SetResults(TArray<TSharedPtr<FResultTreeItem>> InNodes)
+{
+	RootNodes = MoveTemp(InNodes);
+
+	if (TreeView.IsValid())
+	{
+		TreeView->RequestTreeRefresh();
+
+		for (const TSharedPtr<FResultTreeItem>& Node : RootNodes)
+			TreeView->SetItemExpansion(Node, true);
+	}
+}
+
+TSharedRef<ITableRow> SBPCheckSuggestionsPanel::OnGenerateRow(TSharedPtr<FResultTreeItem> Node, const TSharedRef<STableViewBase>& Owner)
+{
+	return SNew(STableRow<TSharedPtr<FResultTreeItem>>, Owner)
+		[
+			SNew(STextBlock).Text(FText::FromString(Node->Label))
+		];
+}
+
+void SBPCheckSuggestionsPanel::OnGetChildren(TSharedPtr<FResultTreeItem> Node, TArray<TSharedPtr<FResultTreeItem>>& OutChildren)
+{
+	if (Node.IsValid())
+	{
+		OutChildren = Node->Children;
+	}
 }
 
 void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
@@ -105,7 +146,6 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		}
 
 		const FSuggestionInfo& Info = GetSuggestionInfo(Suggestion.Suggestion);
-
 
 		TSharedRef<FTokenizedMessage> Msg = FTokenizedMessage::Create(EMessageSeverity::Warning);
 		Msg->AddToken(FTextToken::Create(FText::FromString(Info.SuggestionCode)));
