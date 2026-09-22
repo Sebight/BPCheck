@@ -6,10 +6,19 @@
 #include "BlueprintCompilerExtension.h"
 #include "Commandlets/Commandlet.h"
 
+#include "BPCheckCore.h"
+
 #include "BPCheckEditor.generated.h"
 
+struct FResultTreeItem;
 DECLARE_LOG_CATEGORY_EXTERN(LogBPCheckEditor, Log, All);
 
+namespace BPCheck::Editor
+{
+	UEdGraphNode* ResolveNode(const UBlueprint* Blueprint, FGuid NodeGuid);
+}
+
+class SBPCheckSuggestionsPanel;
 class FBPCheckEditorModule : public IModuleInterface
 {
 public:
@@ -19,6 +28,48 @@ public:
 
 	void CreateMenuItem();
 	void OnButtonClicked();
+
+	void SetSuggestionsForBlueprint(const UBlueprint* Blueprint, TArray<FSuggestionContext>& NewSuggestions);
+
+private:
+	TSharedRef<SDockTab> CreateSuggestionsTab(const FSpawnTabArgs&);
+	TArray<TSharedPtr<FResultTreeItem>> BuildTree() const;
+
+	TWeakPtr<SBPCheckSuggestionsPanel> SuggestionsPanel;
+	TMap<const UBlueprint*, TArray<FSuggestionContext>> Suggestions;
+};
+
+enum class EItemSeverity : uint8 { Info, Warning, Error, Group };
+
+struct FResultTreeItem
+{
+	// BP Name or Suggestion Code
+	FString Label;
+	FString Description;
+	EItemSeverity Severity;
+	bool bIsGroup = false;
+	TWeakObjectPtr<UEdGraphNode> Node;
+	TArray<TSharedPtr<FResultTreeItem>> Children;
+};
+
+class SBPCheckSuggestionsPanel : public SCompoundWidget
+{
+public:
+	SLATE_BEGIN_ARGS(SBPCheckSuggestionsPanel) {}
+	SLATE_END_ARGS()
+
+	void Construct(const FArguments& InArgs);
+
+	void SetResults(TArray<TSharedPtr<FResultTreeItem>> InNodes);
+
+private:
+	TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FResultTreeItem> Node, const TSharedRef<STableViewBase>& Owner);
+	void OnGetChildren(TSharedPtr<FResultTreeItem> Node, TArray<TSharedPtr<FResultTreeItem>>& OutChildren);
+
+	TArray<TSharedPtr<FResultTreeItem>> RootNodes;
+	TSharedPtr<STreeView<TSharedPtr<FResultTreeItem>>> TreeView;
+
+	void OnItemDoubleClicked(TSharedPtr<FResultTreeItem> Item);
 };
 
 UCLASS()
