@@ -47,6 +47,18 @@ struct FAnalyzerReport
 	TArray<FAnalyzerResult> Results;
 };
 
+enum class ENodeContext
+{
+	Dead = 0,
+	InTick = 1,
+	InALoop = 2
+};
+
+struct FAnalysisContext
+{
+	TMap<FGuid, TArray<ENodeContext>> NodeData;
+};
+
 class BPCHECKCORE_API FAnalysisRule
 {
 public:
@@ -78,5 +90,9 @@ private:
 	UEdGraphNode* FindTick(const UBlueprint* Blueprint);
 	TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
 	static bool IsDead(const UEdGraphNode* Node);
+
+	FAnalysisContext BuildContext(const UBlueprint* Blueprint);
+
+private:
 	TArray<TUniquePtr<FAnalysisRule>> Rules;
 };

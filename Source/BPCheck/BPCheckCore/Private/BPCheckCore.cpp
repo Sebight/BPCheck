@@ -129,6 +129,46 @@ bool FAnalyzer::IsDead(const UEdGraphNode* Node)
 	return false;
 }
 
+FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
+{
+	// The idea right now is to start from Tick and walk
+	UEdGraphNode* TickNode = nullptr;
+
+	for (auto& Graph : Blueprint->UbergraphPages)
+	{
+		for (auto& Node : Graph->Nodes)
+		{
+			if (UK2Node_Event* EventNode = Cast<UK2Node_Event>(Node))
+			{
+				if (EventNode->GetFunctionName() == "ReceiveTick")
+				{
+					TickNode = Node;
+					break;
+				}
+			}
+		}
+	}
+
+	if (!TickNode) return {};
+
+	FAnalysisContext Context;
+
+	TFunction<void(UEdGraphNode*, TArray<ENodeContext>)> WalkNode;
+	WalkNode = [&WalkNode, this](UEdGraphNode* Node, TArray<ENodeContext> Inherit)
+		{
+			UE_LOG(LogBPCheckCore, Log, TEXT("Walked: %s(%s)"), *Node->GetName(), *Node->GetNodeTitle(ENodeTitleType::ListView).ToString());
+			auto NextNodes = GetNextExecNode(Node);
+
+			for (auto& NextNode : NextNodes)
+			{
+				WalkNode(NextNode, Inherit);
+			}
+		};
+
+
+	return Context;
+}
+
 #undef LOCTEXT_NAMESPACE
 
 IMPLEMENT_MODULE(FBPCheckCoreModule, BPCheckCore)
