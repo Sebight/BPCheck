@@ -20,6 +20,24 @@ void FBPCheckCoreModule::ShutdownModule()
 
 }
 
+void FAnalysisContext::AddFlags(FGuid NodeGuid, TSet<ENodeFlag> Flags)
+{
+	if (!NodeData.Contains(NodeGuid))
+	{
+		NodeData.Add(NodeGuid, Flags);
+	}
+	else
+	{
+		NodeData.Find(NodeGuid)->Append(Flags);
+	}
+}
+
+bool FAnalysisContext::HasFlag(FGuid NodeGuid, ENodeFlag Flag)
+{
+	if (!NodeData.Contains(NodeGuid)) return false;
+	return NodeData.Find(NodeGuid)->Contains(Flag);
+}
+
 void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions)
 {
 	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
@@ -153,18 +171,24 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 
 	FAnalysisContext Context;
 
-	TFunction<void(UEdGraphNode*, TArray<ENodeContext>)> WalkNode;
-	WalkNode = [&WalkNode, this](UEdGraphNode* Node, TArray<ENodeContext> Inherit)
+	TFunction<void(const UEdGraphNode*, TSet<ENodeFlag>, FAnalysisContext&)> WalkNode;
+	WalkNode = [&WalkNode, this](const UEdGraphNode* Node, TSet<ENodeFlag> Inherit, FAnalysisContext& Context)
 		{
-			UE_LOG(LogBPCheckCore, Log, TEXT("Walked: %s(%s)"), *Node->GetName(), *Node->GetNodeTitle(ENodeTitleType::ListView).ToString());
-			auto NextNodes = GetNextExecNode(Node);
+			//if (!Inherit.Contains(ENodeFlag::Dead) && IsDead(Node))
+			//{
+			//	Inherit.Push(ENodeFlag::Dead);
+			//}
 
+			Context.AddFlags(Node->NodeGuid, Inherit);
+
+			auto NextNodes = GetNextExecNode(Node);
 			for (auto& NextNode : NextNodes)
 			{
-				WalkNode(NextNode, Inherit);
+				WalkNode(NextNode, Inherit, Context);
 			}
 		};
 
+	WalkNode(TickNode, { ENodeFlag::InTick }, Context);
 
 	return Context;
 }

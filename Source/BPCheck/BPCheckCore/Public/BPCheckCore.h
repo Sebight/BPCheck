@@ -47,16 +47,21 @@ struct FAnalyzerReport
 	TArray<FAnalyzerResult> Results;
 };
 
-enum class ENodeContext
+enum class ENodeFlag
 {
 	Dead = 0,
 	InTick = 1,
 	InALoop = 2
 };
 
-struct FAnalysisContext
+class FAnalysisContext
 {
-	TMap<FGuid, TArray<ENodeContext>> NodeData;
+public:
+	void AddFlags(FGuid NodeGuid, TSet<ENodeFlag> Flags);
+	bool HasFlag(FGuid NodeGuid, ENodeFlag Flag);
+
+private:
+	TMap<FGuid, TSet<ENodeFlag>> NodeData;
 };
 
 class BPCHECKCORE_API FAnalysisRule
