@@ -39,6 +39,16 @@ bool FAnalysisContext::HasFlag(FGuid NodeGuid, ENodeFlag Flag) const
 	return NodeData.Find(NodeGuid)->Contains(Flag);
 }
 
+void FAnalysisContext::MarkNodeAlive(FGuid NodeGuid)
+{
+	AliveNodes.Add(NodeGuid);
+}
+
+bool FAnalysisContext::IsDead(FGuid NodeGuid) const
+{
+	return !AliveNodes.Contains(NodeGuid);
+}
+
 void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
 	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
@@ -78,7 +88,7 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	{
 		for (auto Node : Page->Nodes)
 		{
-			if (IsDead(Node)) continue;
+			if (Context.IsDead(Node->NodeGuid)) continue;
 
 			for (const auto& Rule : Rules)
 			{
@@ -158,19 +168,6 @@ TArray<UEdGraphNode*> FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode
 	return Out;
 }
 
-bool FAnalyzer::IsDead(const UEdGraphNode* Node)
-{
-	// TODO(Seb): This function is reliable for a single node, but breaks for chains. I think this should be part of the context-build in the future.
-	for (auto Pin : Node->Pins) {
-		if (Pin->Direction == EGPD_Input && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
-		{
-			return Pin->LinkedTo.Num() == 0;
-		}
-	}
-
-	return false;
-}
-
 FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 {
 	TSet<UEdGraphNode*> EntryPoints;
@@ -190,6 +187,8 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 	TFunction<void(const UEdGraphNode*, TSet<ENodeFlag>, FAnalysisContext&)> WalkNode;
 	WalkNode = [&WalkNode, this](const UEdGraphNode* Node, TSet<ENodeFlag> Inherit, FAnalysisContext& Context)
 		{
+			Context.MarkNodeAlive(Node->NodeGuid);
+
 			if (const UK2Node_Event* EventNode = Cast<UK2Node_Event>(Node))
 			{
 				if (EventNode->GetFunctionName() == "ReceiveTick")

@@ -49,9 +49,8 @@ struct FAnalyzerReport
 
 enum class ENodeFlag
 {
-	Dead = 0,
-	InTick = 1,
-	InALoop = 2
+	InTick = 0,
+	InALoop = 1
 };
 
 class FAnalysisContext
@@ -60,7 +59,11 @@ public:
 	void AddFlags(FGuid NodeGuid, TSet<ENodeFlag> Flags);
 	bool HasFlag(FGuid NodeGuid, ENodeFlag Flag) const;
 
+	void MarkNodeAlive(FGuid NodeGuid);
+
+	bool IsDead(FGuid NodeGuid) const;
 private:
+	TSet<FGuid> AliveNodes;
 	TMap<FGuid, TSet<ENodeFlag>> NodeData;
 };
 
@@ -95,7 +98,6 @@ private:
 	TSet<UEdGraphNode*> CollectEntryPoints(const UEdGraph* Graph) const;
 	UEdGraphNode* FindTick(const UBlueprint* Blueprint);
 	TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
-	static bool IsDead(const UEdGraphNode* Node);
 
 	FAnalysisContext BuildContext(const UBlueprint* Blueprint);
 
