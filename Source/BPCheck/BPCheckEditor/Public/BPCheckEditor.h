@@ -39,9 +39,15 @@ private:
 	TMap<const UBlueprint*, TArray<FSuggestionContext>> Suggestions;
 };
 
+enum class EItemSeverity : uint8 { Info, Warning, Error, Group };
+
 struct FResultTreeItem
 {
+	// BP Name or Suggestion Code
 	FString Label;
+	FString Description;
+	EItemSeverity Severity;
+	bool bIsGroup = false;
 	TWeakObjectPtr<UEdGraphNode> Node;
 	TArray<TSharedPtr<FResultTreeItem>> Children;
 };

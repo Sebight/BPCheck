@@ -11,6 +11,10 @@
 #include "Logging/TokenizedMessage.h"
 #include "Misc/UObjectToken.h"
 #include "Kismet2/KismetEditorUtilities.h"
+#include "Widgets/Views/SHeaderRow.h"
+#include "Widgets/Views/SExpanderArrow.h"
+#include "Widgets/Images/SImage.h"
+#include "Styling/StyleColors.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -92,6 +96,93 @@ TSharedRef<SDockTab> FBPCheckEditorModule::CreateSuggestionsTab(const FSpawnTabA
 	return SNew(SDockTab).TabRole(NomadTab)[Panel];
 }
 
+namespace ColumnIds
+{
+	static const FName Severity("Severity");
+	static const FName Code("Code");
+	static const FName Description("Description");
+}
+
+static const FTableRowStyle& GetRowStyle()
+{
+	static FTableRowStyle Style = FAppStyle::Get().GetWidgetStyle<FTableRowStyle>("TableView.Row");
+	static bool bInit = false;
+	if (!bInit)
+	{
+		static FSlateColorBrush Even(FLinearColor(0.020f, 0.020f, 0.022f, 1.f));
+		static FSlateColorBrush Odd(FLinearColor(0.035f, 0.035f, 0.040f, 1.f));
+		Style.SetEvenRowBackgroundBrush(Even).SetEvenRowBackgroundHoveredBrush(Even);
+		Style.SetOddRowBackgroundBrush(Odd).SetOddRowBackgroundHoveredBrush(Odd);
+		bInit = true;
+	}
+	return Style;
+}
+
+// Claude helped with this UI work.
+class SSuggestionRow : public SMultiColumnTableRow<TSharedPtr<FResultTreeItem>>
+{
+public:
+	SLATE_BEGIN_ARGS(SSuggestionRow) {}
+		SLATE_ARGUMENT(TSharedPtr<FResultTreeItem>, Item)
+	SLATE_END_ARGS()
+
+	void Construct(const FArguments& InArgs, const TSharedRef<STableViewBase>& Owner)
+	{
+		Item = InArgs._Item;
+		FSuperRowType::Construct(FSuperRowType::FArguments().Style(&GetRowStyle()), Owner);
+	}
+
+	virtual TSharedRef<SWidget> GenerateWidgetForColumn(const FName& Column) override
+	{
+		if (Column == ColumnIds::Severity)
+		{
+			return SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				[SNew(SExpanderArrow, SharedThis(this)).IndentAmount(12)]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0)
+				[SNew(SImage).Image(GetIcon()).ColorAndOpacity(GetTint())];
+		}
+		if (Column == ColumnIds::Code)
+		{
+			return SNew(STextBlock)
+				.Text(FText::FromString(Item->Label))
+				.Font(FCoreStyle::GetDefaultFontStyle(Item->bIsGroup ? "Bold" : "Regular", 9));
+		}
+		if (Column == ColumnIds::Description)
+		{
+			return SNew(STextBlock)
+				.Text(FText::FromString(Item->Description))
+				.ColorAndOpacity(FSlateColor(FStyleColors::Foreground));
+		}
+		return SNullWidget::NullWidget;
+	}
+
+private:
+	const FSlateBrush* GetIcon() const
+	{
+		switch (Item->Severity)
+		{
+		case EItemSeverity::Error:   return FAppStyle::Get().GetBrush("Icons.Error");
+		case EItemSeverity::Warning: return FAppStyle::Get().GetBrush("Icons.Warning");
+		case EItemSeverity::Group:   return FAppStyle::Get().GetBrush("Icons.FolderClosed");
+		default:                     return FAppStyle::Get().GetBrush("Icons.Info");
+		}
+	}
+
+	FSlateColor GetTint() const
+	{
+		switch (Item->Severity)
+		{
+		case EItemSeverity::Error:   return FStyleColors::Error;
+		case EItemSeverity::Warning: return FStyleColors::Warning;
+		case EItemSeverity::Group:   return FStyleColors::AccentGray;
+		default:                     return FStyleColors::AccentBlue;
+		}
+	}
+
+	TSharedPtr<FResultTreeItem> Item;
+};
+
 TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 {
 	TArray<TSharedPtr<FResultTreeItem>> Roots;
@@ -103,14 +194,18 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 
 		TSharedPtr<FResultTreeItem> Group = MakeShared<FResultTreeItem>();
 		Group->Label = FString::Printf(TEXT("%s (%d)"), *BP->GetName(), Pair.Value.Num());
+		Group->bIsGroup = true;
+		Group->Severity = EItemSeverity::Group;
 
 		for (const FSuggestionContext& S : Pair.Value)
 		{
 			const FSuggestionInfo& Info = GetSuggestionInfo(S.Suggestion);
 
 			TSharedPtr<FResultTreeItem> Leaf = MakeShared<FResultTreeItem>();
-			Leaf->Label = FString::Printf(TEXT("%s  %s"), *Info.SuggestionCode, *Info.SuggestionDescription);
+			Leaf->Label = FString::Printf(TEXT("%s"), *Info.SuggestionCode);
+			Leaf->Description = FString::Printf(TEXT("%s"), *Info.SuggestionDescription);
 			Leaf->Node = BPCheck::Editor::ResolveNode(BP, S.NodeGuid);
+			Leaf->Severity = EItemSeverity::Warning;
 			Group->Children.Add(Leaf);
 		}
 		Roots.Add(Group);
@@ -128,6 +223,15 @@ void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
 				.OnGetChildren(this, &SBPCheckSuggestionsPanel::OnGetChildren)
 				.SelectionMode(ESelectionMode::Single)
 				.OnMouseButtonDoubleClick(this, &SBPCheckSuggestionsPanel::OnItemDoubleClicked)
+				.HeaderRow(
+					SNew(SHeaderRow)
+					+ SHeaderRow::Column(ColumnIds::Severity)
+					.DefaultLabel(FText::GetEmpty()).FixedWidth(48.0f)
+					+ SHeaderRow::Column(ColumnIds::Code)
+					.DefaultLabel(LOCTEXT("ColCode", "Code")).FillWidth(0.25f)
+					+ SHeaderRow::Column(ColumnIds::Description)
+					.DefaultLabel(LOCTEXT("ColDesc", "Description")).FillWidth(0.75f)
+				)
 		];
 }
 
@@ -146,10 +250,7 @@ void SBPCheckSuggestionsPanel::SetResults(TArray<TSharedPtr<FResultTreeItem>> In
 
 TSharedRef<ITableRow> SBPCheckSuggestionsPanel::OnGenerateRow(TSharedPtr<FResultTreeItem> Node, const TSharedRef<STableViewBase>& Owner)
 {
-	return SNew(STableRow<TSharedPtr<FResultTreeItem>>, Owner)
-		[
-			SNew(STextBlock).Text(FText::FromString(Node->Label))
-		];
+	return SNew(SSuggestionRow, Owner).Item(Node);
 }
 
 void SBPCheckSuggestionsPanel::OnGetChildren(TSharedPtr<FResultTreeItem> Node, TArray<TSharedPtr<FResultTreeItem>>& OutChildren)
