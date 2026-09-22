@@ -4,6 +4,7 @@
 
 #include "K2Node_CallFunction.h"
 #include "K2Node_DynamicCast.h"
+#include "K2Node_FunctionEntry.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
@@ -32,13 +33,13 @@ void FAnalysisContext::AddFlags(FGuid NodeGuid, TSet<ENodeFlag> Flags)
 	}
 }
 
-bool FAnalysisContext::HasFlag(FGuid NodeGuid, ENodeFlag Flag)
+bool FAnalysisContext::HasFlag(FGuid NodeGuid, ENodeFlag Flag) const
 {
 	if (!NodeData.Contains(NodeGuid)) return false;
 	return NodeData.Find(NodeGuid)->Contains(Flag);
 }
 
-void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions)
+void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
 	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
 
@@ -46,13 +47,12 @@ void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCont
 	{
 		if (Call->GetTargetFunction() == PrintStringFn)
 		{
-			// TODO(Seb): Check with Context
-			// if (Context.IsInHotPath(Call->NodeGuid))
-
-			Suggestions.Push({
+			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
+			{
+				Suggestions.Push({
 				ESuggestion::PrintInHotPath,
-				Call->NodeGuid
-				});
+				Call->NodeGuid });
+			}
 		}
 	}
 }
@@ -71,6 +71,8 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 {
 	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *Blueprint->GetName());
 
+	const FAnalysisContext Context = BuildContext(Blueprint);
+
 	TArray<FSuggestionContext> Suggestions;
 	for (auto& Page : Blueprint->UbergraphPages)
 	{
@@ -80,7 +82,7 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 
 			for (const auto& Rule : Rules)
 			{
-				Rule->Check(Node, Suggestions);
+				Rule->Check(Node, Suggestions, Context);
 			}
 		}
 	}
@@ -97,6 +99,28 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	Result.Suggestions = MoveTemp(Suggestions);
 
 	return Result;
+}
+
+TSet<UEdGraphNode*> FAnalyzer::CollectEntryPoints(const UEdGraph* Graph) const
+{
+	TSet<UEdGraphNode*> OutNodes;
+
+	for (auto Node : Graph->Nodes)
+	{
+		if (!Node) continue;
+
+		if (Node->IsA<UK2Node_Event>())
+		{
+			OutNodes.Add(Node);
+		}
+
+		if (Node->IsA<UK2Node_FunctionEntry>())
+		{
+			OutNodes.Add(Node);
+		}
+	}
+
+	return OutNodes;
 }
 
 UEdGraphNode* FAnalyzer::FindTick(const UBlueprint* Blueprint)
@@ -149,35 +173,30 @@ bool FAnalyzer::IsDead(const UEdGraphNode* Node)
 
 FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 {
-	// The idea right now is to start from Tick and walk
-	UEdGraphNode* TickNode = nullptr;
+	TSet<UEdGraphNode*> EntryPoints;
 
-	for (auto& Graph : Blueprint->UbergraphPages)
+	for (auto Graph : Blueprint->UbergraphPages)
 	{
-		for (auto& Node : Graph->Nodes)
-		{
-			if (UK2Node_Event* EventNode = Cast<UK2Node_Event>(Node))
-			{
-				if (EventNode->GetFunctionName() == "ReceiveTick")
-				{
-					TickNode = Node;
-					break;
-				}
-			}
-		}
+		EntryPoints.Append(CollectEntryPoints(Graph));
 	}
 
-	if (!TickNode) return {};
+	for (auto Graph : Blueprint->FunctionGraphs)
+	{
+		EntryPoints.Append(CollectEntryPoints(Graph));
+	}
 
 	FAnalysisContext Context;
 
 	TFunction<void(const UEdGraphNode*, TSet<ENodeFlag>, FAnalysisContext&)> WalkNode;
 	WalkNode = [&WalkNode, this](const UEdGraphNode* Node, TSet<ENodeFlag> Inherit, FAnalysisContext& Context)
 		{
-			//if (!Inherit.Contains(ENodeFlag::Dead) && IsDead(Node))
-			//{
-			//	Inherit.Push(ENodeFlag::Dead);
-			//}
+			if (const UK2Node_Event* EventNode = Cast<UK2Node_Event>(Node))
+			{
+				if (EventNode->GetFunctionName() == "ReceiveTick")
+				{
+					Inherit.Add(ENodeFlag::InTick);
+				}
+			}
 
 			Context.AddFlags(Node->NodeGuid, Inherit);
 
@@ -188,7 +207,10 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 			}
 		};
 
-	WalkNode(TickNode, { ENodeFlag::InTick }, Context);
+	for (auto* Entry : EntryPoints)
+	{
+		WalkNode(Entry, {}, Context);
+	}
 
 	return Context;
 }

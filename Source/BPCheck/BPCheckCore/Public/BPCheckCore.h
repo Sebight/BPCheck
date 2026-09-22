@@ -58,7 +58,7 @@ class FAnalysisContext
 {
 public:
 	void AddFlags(FGuid NodeGuid, TSet<ENodeFlag> Flags);
-	bool HasFlag(FGuid NodeGuid, ENodeFlag Flag);
+	bool HasFlag(FGuid NodeGuid, ENodeFlag Flag) const;
 
 private:
 	TMap<FGuid, TSet<ENodeFlag>> NodeData;
@@ -69,13 +69,13 @@ class BPCHECKCORE_API FAnalysisRule
 public:
 	FAnalysisRule() = default;
 	virtual ~FAnalysisRule() = default;
-	virtual void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions) = 0;
+	virtual void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) = 0;
 };
 
 class BPCHECKCORE_API FPrintInHotPathRule : public FAnalysisRule
 {
 public:
-	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions) override;
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
 };
 
 class BPCHECKCORE_API FAnalyzer
@@ -92,6 +92,7 @@ public:
 
 private:
 	// I think these could be static'd and moved into a namespace
+	TSet<UEdGraphNode*> CollectEntryPoints(const UEdGraph* Graph) const;
 	UEdGraphNode* FindTick(const UBlueprint* Blueprint);
 	TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
 	static bool IsDead(const UEdGraphNode* Node);
