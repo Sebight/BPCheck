@@ -5,6 +5,7 @@
 #include "K2Node_CallFunction.h"
 #include "K2Node_DynamicCast.h"
 #include "K2Node_FunctionEntry.h"
+#include "K2Node_MacroInstance.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
@@ -148,21 +149,30 @@ UEdGraphNode* FAnalyzer::FindTick(const UBlueprint* Blueprint)
 	return nullptr;
 }
 
-TArray<UEdGraphNode*> FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode)
+TArray<FNextExecNode> FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode)
 {
-	TArray<UEdGraphNode*> Out;
+	TArray<FNextExecNode> Out;
 
+	uint8 PinIdx = 0;
 	for (auto Pin : CurrentNode->Pins)
 	{
 		if (Pin->Direction == EGPD_Output && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
 		{
 			auto LinkedToCount = Pin->LinkedTo.Num();
 
-			if (LinkedToCount == 0) continue;
+			if (LinkedToCount == 0)
+			{
+				PinIdx++;
+				continue;
+			}
 
+			FNextExecNode NextNode;
+			NextNode.PinIndex = PinIdx++;
 			// Note(Seb): I think assuming 0 here is okay, since the output execution pin can only go to one?
-			Out.Push(Pin->LinkedTo[0]->GetOwningNode());
+			NextNode.Node = Pin->LinkedTo[0]->GetOwningNode();
+			Out.Push(NextNode);
 		}
+
 	}
 
 	return Out;
@@ -189,6 +199,8 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 		{
 			Context.MarkNodeAlive(Node->NodeGuid);
 
+			TMap<uint8, TSet<ENodeFlag>> PinModifiers;
+
 			if (const UK2Node_Event* EventNode = Cast<UK2Node_Event>(Node))
 			{
 				if (EventNode->GetFunctionName() == "ReceiveTick")
@@ -197,12 +209,29 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 				}
 			}
 
+			if (const UK2Node_MacroInstance* MacroInstance = Cast<UK2Node_MacroInstance>(Node))
+			{
+				FString Name = MacroInstance->GetMacroGraph()->GetName();
+				if (Name.Equals("ForLoop") || Name.Equals("ForEachLoop"))
+				{
+					// Pin 0 is the Loop Body, which means that we want to flag all of the nodes under there with InLoop.
+					// From what I've tried, the pin order seems to be consistent, I hope it doesn't hurt me later.
+					PinModifiers.Add(0, { ENodeFlag::InALoop });
+				}
+			}
+
 			Context.AddFlags(Node->NodeGuid, Inherit);
 
 			auto NextNodes = GetNextExecNode(Node);
 			for (auto& NextNode : NextNodes)
 			{
-				WalkNode(NextNode, Inherit, Context);
+				TSet<ENodeFlag> Flags = Inherit;
+				if (PinModifiers.Contains(NextNode.PinIndex))
+				{
+					Flags.Append(*PinModifiers.Find(NextNode.PinIndex));
+				}
+
+				WalkNode(NextNode.Node, Flags, Context);
 			}
 		};
 

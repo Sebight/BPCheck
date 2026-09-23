@@ -81,6 +81,12 @@ public:
 	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
 };
 
+struct FNextExecNode
+{
+	UEdGraphNode* Node;
+	uint8 PinIndex;
+};
+
 class BPCHECKCORE_API FAnalyzer
 {
 public:
@@ -97,7 +103,7 @@ private:
 	// I think these could be static'd and moved into a namespace
 	TSet<UEdGraphNode*> CollectEntryPoints(const UEdGraph* Graph) const;
 	UEdGraphNode* FindTick(const UBlueprint* Blueprint);
-	TArray<UEdGraphNode*> GetNextExecNode(const UEdGraphNode* CurrentNode);
+	TArray<FNextExecNode> GetNextExecNode(const UEdGraphNode* CurrentNode);
 
 	FAnalysisContext BuildContext(const UBlueprint* Blueprint);
 
