@@ -212,7 +212,7 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 			if (const UK2Node_MacroInstance* MacroInstance = Cast<UK2Node_MacroInstance>(Node))
 			{
 				FString Name = MacroInstance->GetMacroGraph()->GetName();
-				if (Name.Equals("ForLoop") || Name.Equals("ForEachLoop"))
+				if (Name.Equals("ForLoop") || Name.Equals("ForEachLoop") || Name.Equals("WhileLoop"))
 				{
 					// Pin 0 is the Loop Body, which means that we want to flag all of the nodes under there with InLoop.
 					// From what I've tried, the pin order seems to be consistent, I hope it doesn't hurt me later.
