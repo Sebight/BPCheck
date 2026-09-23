@@ -311,6 +311,10 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 
 		Msg->AddToken(FTextToken::Create(FText::FromString(Info.SuggestionDescription)));
 
+		Node->bHasCompilerMessage = true;
+		Node->ErrorType = static_cast<int32>(EMessageSeverity::Info);
+		Node->ErrorMsg = FString::Printf(TEXT("BPCheck: %s\n%s"), *Info.SuggestionCode, *Info.SuggestionDescription);
+
 		FMessageLog("BPCheck").AddMessage(Msg);
 	}
 
