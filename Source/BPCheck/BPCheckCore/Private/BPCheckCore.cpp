@@ -4,6 +4,8 @@
 
 #include "K2Node_CallFunction.h"
 #include "K2Node_DynamicCast.h"
+#include "K2Node_FunctionEntry.h"
+#include "K2Node_MacroInstance.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
@@ -20,7 +22,35 @@ void FBPCheckCoreModule::ShutdownModule()
 
 }
 
-void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions)
+void FAnalysisContext::AddFlags(FGuid NodeGuid, TSet<ENodeFlag> Flags)
+{
+	if (!NodeData.Contains(NodeGuid))
+	{
+		NodeData.Add(NodeGuid, Flags);
+	}
+	else
+	{
+		NodeData.Find(NodeGuid)->Append(Flags);
+	}
+}
+
+bool FAnalysisContext::HasFlag(FGuid NodeGuid, ENodeFlag Flag) const
+{
+	if (!NodeData.Contains(NodeGuid)) return false;
+	return NodeData.Find(NodeGuid)->Contains(Flag);
+}
+
+void FAnalysisContext::MarkNodeAlive(FGuid NodeGuid)
+{
+	AliveNodes.Add(NodeGuid);
+}
+
+bool FAnalysisContext::IsDead(FGuid NodeGuid) const
+{
+	return !AliveNodes.Contains(NodeGuid);
+}
+
+void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
 	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
 
@@ -28,13 +58,12 @@ void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCont
 	{
 		if (Call->GetTargetFunction() == PrintStringFn)
 		{
-			// TODO(Seb): Check with Context
-			// if (Context.IsInHotPath(Call->NodeGuid))
-
-			Suggestions.Push({
+			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
+			{
+				Suggestions.Push({
 				ESuggestion::PrintInHotPath,
-				Call->NodeGuid
-				});
+				Call->NodeGuid });
+			}
 		}
 	}
 }
@@ -53,16 +82,18 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 {
 	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *Blueprint->GetName());
 
+	const FAnalysisContext Context = BuildContext(Blueprint);
+
 	TArray<FSuggestionContext> Suggestions;
 	for (auto& Page : Blueprint->UbergraphPages)
 	{
 		for (auto Node : Page->Nodes)
 		{
-			if (IsDead(Node)) continue;
+			if (Context.IsDead(Node->NodeGuid)) continue;
 
 			for (const auto& Rule : Rules)
 			{
-				Rule->Check(Node, Suggestions);
+				Rule->Check(Node, Suggestions, Context);
 			}
 		}
 	}
@@ -81,6 +112,28 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	return Result;
 }
 
+TSet<UEdGraphNode*> FAnalyzer::CollectEntryPoints(const UEdGraph* Graph) const
+{
+	TSet<UEdGraphNode*> OutNodes;
+
+	for (auto Node : Graph->Nodes)
+	{
+		if (!Node) continue;
+
+		if (Node->IsA<UK2Node_Event>())
+		{
+			OutNodes.Add(Node);
+		}
+
+		if (Node->IsA<UK2Node_FunctionEntry>())
+		{
+			OutNodes.Add(Node);
+		}
+	}
+
+	return OutNodes;
+}
+
 UEdGraphNode* FAnalyzer::FindTick(const UBlueprint* Blueprint)
 {
 	for (auto& Graph : Blueprint->UbergraphPages)
@@ -96,37 +149,98 @@ UEdGraphNode* FAnalyzer::FindTick(const UBlueprint* Blueprint)
 	return nullptr;
 }
 
-TArray<UEdGraphNode*> FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode)
+TArray<FNextExecNode> FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode)
 {
-	TArray<UEdGraphNode*> Out;
+	TArray<FNextExecNode> Out;
 
+	uint8 PinIdx = 0;
 	for (auto Pin : CurrentNode->Pins)
 	{
 		if (Pin->Direction == EGPD_Output && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
 		{
 			auto LinkedToCount = Pin->LinkedTo.Num();
 
-			if (LinkedToCount == 0) continue;
+			if (LinkedToCount == 0)
+			{
+				PinIdx++;
+				continue;
+			}
 
+			FNextExecNode NextNode;
+			NextNode.PinIndex = PinIdx++;
 			// Note(Seb): I think assuming 0 here is okay, since the output execution pin can only go to one?
-			Out.Push(Pin->LinkedTo[0]->GetOwningNode());
+			NextNode.Node = Pin->LinkedTo[0]->GetOwningNode();
+			Out.Push(NextNode);
 		}
+
 	}
 
 	return Out;
 }
 
-bool FAnalyzer::IsDead(const UEdGraphNode* Node)
+FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 {
-	// TODO(Seb): This function is reliable for a single node, but breaks for chains. I think this should be part of the context-build in the future.
-	for (auto Pin : Node->Pins) {
-		if (Pin->Direction == EGPD_Input && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
-		{
-			return Pin->LinkedTo.Num() == 0;
-		}
+	TSet<UEdGraphNode*> EntryPoints;
+
+	for (auto Graph : Blueprint->UbergraphPages)
+	{
+		EntryPoints.Append(CollectEntryPoints(Graph));
 	}
 
-	return false;
+	for (auto Graph : Blueprint->FunctionGraphs)
+	{
+		EntryPoints.Append(CollectEntryPoints(Graph));
+	}
+
+	FAnalysisContext Context;
+
+	TFunction<void(const UEdGraphNode*, TSet<ENodeFlag>, FAnalysisContext&)> WalkNode;
+	WalkNode = [&WalkNode, this](const UEdGraphNode* Node, TSet<ENodeFlag> Inherit, FAnalysisContext& Context)
+		{
+			Context.MarkNodeAlive(Node->NodeGuid);
+
+			TMap<uint8, TSet<ENodeFlag>> PinModifiers;
+
+			if (const UK2Node_Event* EventNode = Cast<UK2Node_Event>(Node))
+			{
+				if (EventNode->GetFunctionName() == "ReceiveTick")
+				{
+					Inherit.Add(ENodeFlag::InTick);
+				}
+			}
+
+			if (const UK2Node_MacroInstance* MacroInstance = Cast<UK2Node_MacroInstance>(Node))
+			{
+				FString Name = MacroInstance->GetMacroGraph()->GetName();
+				if (Name.Equals("ForLoop") || Name.Equals("ForEachLoop") || Name.Equals("WhileLoop"))
+				{
+					// Pin 0 is the Loop Body, which means that we want to flag all of the nodes under there with InLoop.
+					// From what I've tried, the pin order seems to be consistent, I hope it doesn't hurt me later.
+					PinModifiers.Add(0, { ENodeFlag::InALoop });
+				}
+			}
+
+			Context.AddFlags(Node->NodeGuid, Inherit);
+
+			auto NextNodes = GetNextExecNode(Node);
+			for (auto& NextNode : NextNodes)
+			{
+				TSet<ENodeFlag> Flags = Inherit;
+				if (PinModifiers.Contains(NextNode.PinIndex))
+				{
+					Flags.Append(*PinModifiers.Find(NextNode.PinIndex));
+				}
+
+				WalkNode(NextNode.Node, Flags, Context);
+			}
+		};
+
+	for (auto* Entry : EntryPoints)
+	{
+		WalkNode(Entry, {}, Context);
+	}
+
+	return Context;
 }
 
 #undef LOCTEXT_NAMESPACE
