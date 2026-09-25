@@ -102,10 +102,55 @@ void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Sugg
 	}
 }
 
+void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	if (FAnalyzer::IsNodePure(Node)) return;
+
+	if (Context.IsDead(Node->NodeGuid))
+	{
+		bool AnyConnections = false;
+
+		for (auto Pin : Node->Pins)
+		{
+			if (Pin->Direction == EGPD_Output && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
+			{
+				auto LinkedToCount = Pin->LinkedTo.Num();
+
+				if (LinkedToCount > 0)
+				{
+					AnyConnections = true;
+					break;
+				}
+			}
+		}
+
+		if (AnyConnections)
+		{
+			Suggestions.Push(
+				{
+					ESuggestion::Unreachable,
+					Node->NodeGuid
+				}
+			);
+		}
+		else
+		{
+			Suggestions.Push(
+				{
+					ESuggestion::Disconnected,
+					Node->NodeGuid
+				}
+			);
+		}
+
+	}
+}
+
 FAnalyzer::FAnalyzer()
 {
 	Rules.Push(MakeUnique<FPrintInHotPathRule>());
 	Rules.Push(MakeUnique<FCastRule>());
+	Rules.Push(MakeUnique<FDeadCodeRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
@@ -124,8 +169,9 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	{
 		for (auto Node : Page->Nodes)
 		{
-			// TODO(Seb): This needs to handle pure nodes properly
-			// if (Context.IsDead(Node->NodeGuid)) continue;
+			// TODO(Seb): This blocks the Dead node rules, maybe adding an exception there would make sense
+			// or manually checking for deadness in all other rules?
+			// if (!Context.IsPure(Node->NodeGuid) && Context.IsDead(Node->NodeGuid)) continue;
 
 			for (const auto& Rule : Rules)
 			{
@@ -212,6 +258,16 @@ TArray<FNextExecNode> FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode
 	}
 
 	return Out;
+}
+
+bool FAnalyzer::IsNodePure(const UEdGraphNode* Node)
+{
+	if (const UK2Node* K2Node = Cast<UK2Node>(Node))
+	{
+		return K2Node->IsNodePure();
+	}
+
+	return false;
 }
 
 FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)

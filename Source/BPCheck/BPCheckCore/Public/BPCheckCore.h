@@ -62,6 +62,7 @@ public:
 	void MarkNodeAlive(FGuid NodeGuid);
 
 	bool IsDead(FGuid NodeGuid) const;
+
 private:
 	TSet<FGuid> AliveNodes;
 	TMap<FGuid, TSet<ENodeFlag>> NodeData;
@@ -87,6 +88,12 @@ public:
 	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
 };
 
+class BPCHECKCORE_API FDeadCodeRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
 struct FNextExecNode
 {
 	UEdGraphNode* Node;
@@ -105,6 +112,7 @@ public:
 	FAnalyzerResult Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
 	FAnalyzerResult Analyze(const UBlueprint* Blueprint);
 
+	static bool IsNodePure(const UEdGraphNode* Node);
 private:
 	// I think these could be static'd and moved into a namespace
 	TSet<UEdGraphNode*> CollectEntryPoints(const UEdGraph* Graph) const;
