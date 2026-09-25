@@ -60,9 +60,43 @@ void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCont
 		{
 			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
 			{
-				Suggestions.Push({
-				ESuggestion::PrintInHotPath,
-				Call->NodeGuid });
+				Suggestions.Push(
+					{
+						ESuggestion::PrintInHotPath,
+						Call->NodeGuid
+					}
+				);
+			}
+		}
+	}
+}
+
+void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	if (const UK2Node_DynamicCast* DynamicCast = Cast<UK2Node_DynamicCast>(Node))
+	{
+		UClass* TargetClass = DynamicCast->TargetType;
+		if (TargetClass && Cast<UBlueprintGeneratedClass>(TargetClass))
+		{
+			Suggestions.Push(
+				{
+					ESuggestion::HardCastToBPClass,
+					DynamicCast->NodeGuid
+				}
+			);
+		}
+
+		if (!DynamicCast->IsNodePure())
+		{
+			UEdGraphPin* FailPin = DynamicCast->GetInvalidCastPin();
+			if (FailPin && FailPin->LinkedTo.Num() == 0)
+			{
+				Suggestions.Push(
+					{
+						ESuggestion::CastWithoutFailHandler,
+						DynamicCast->NodeGuid
+					}
+				);
 			}
 		}
 	}
@@ -71,6 +105,7 @@ void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCont
 FAnalyzer::FAnalyzer()
 {
 	Rules.Push(MakeUnique<FPrintInHotPathRule>());
+	Rules.Push(MakeUnique<FCastRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
@@ -89,7 +124,8 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	{
 		for (auto Node : Page->Nodes)
 		{
-			if (Context.IsDead(Node->NodeGuid)) continue;
+			// TODO(Seb): This needs to handle pure nodes properly
+			// if (Context.IsDead(Node->NodeGuid)) continue;
 
 			for (const auto& Rule : Rules)
 			{

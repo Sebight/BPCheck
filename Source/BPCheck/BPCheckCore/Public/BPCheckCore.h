@@ -81,6 +81,12 @@ public:
 	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
 };
 
+class BPCHECKCORE_API FCastRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
 struct FNextExecNode
 {
 	UEdGraphNode* Node;
