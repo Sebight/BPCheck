@@ -6,6 +6,7 @@
 #include "K2Node_DynamicCast.h"
 #include "K2Node_FunctionEntry.h"
 #include "K2Node_MacroInstance.h"
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
@@ -50,19 +51,37 @@ bool FAnalysisContext::IsDead(FGuid NodeGuid) const
 	return !AliveNodes.Contains(NodeGuid);
 }
 
-void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
 	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
+	static UFunction* GetAllActorsOfClassFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsOfClass"));
+	static UFunction* GetActorsOfClassFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetActorsOfClass"));
+	static UFunction* GetAllActorsWithTagFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsOfClassWithTag"));
+	static UFunction* GetAllActorsWithInterfaceFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsWithInterface"));
 
 	if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
 	{
-		if (Call->GetTargetFunction() == PrintStringFn)
+		UFunction* TargetFn = Call->GetTargetFunction();
+		if (TargetFn == PrintStringFn)
 		{
 			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
 			{
 				Suggestions.Push(
 					{
 						ESuggestion::PrintInHotPath,
+						Call->NodeGuid
+					}
+				);
+			}
+		}
+
+		if (TargetFn == GetAllActorsOfClassFn || TargetFn == GetActorsOfClassFn || TargetFn == GetAllActorsWithTagFn || TargetFn == GetAllActorsWithInterfaceFn)
+		{
+			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
+			{
+				Suggestions.Push(
+					{
+						ESuggestion::HotGetActorsOfClass,
 						Call->NodeGuid
 					}
 				);
@@ -158,7 +177,7 @@ void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& 
 
 FAnalyzer::FAnalyzer()
 {
-	Rules.Push(MakeUnique<FPrintInHotPathRule>());
+	Rules.Push(MakeUnique<FExpensiveHotNodeRule>());
 	Rules.Push(MakeUnique<FCastRule>());
 	Rules.Push(MakeUnique<FDeadCodeRule>());
 }
@@ -188,13 +207,6 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 				Rule->Check(Node, Suggestions, Context);
 			}
 		}
-	}
-
-	TArray<FString> Descriptions;
-	for (auto& SuggestionContext : Suggestions)
-	{
-		auto& Info = GetSuggestionInfo(SuggestionContext.Suggestion);
-		Descriptions.Push(FString::Printf(TEXT("(%s) %s"), *Info.SuggestionCode, *Info.SuggestionDescription));
 	}
 
 	FAnalyzerResult Result;

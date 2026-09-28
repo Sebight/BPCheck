@@ -76,7 +76,7 @@ public:
 	virtual void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) = 0;
 };
 
-class BPCHECKCORE_API FPrintInHotPathRule : public FAnalysisRule
+class BPCHECKCORE_API FExpensiveHotNodeRule : public FAnalysisRule
 {
 public:
 	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
