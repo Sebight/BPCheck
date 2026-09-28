@@ -175,11 +175,34 @@ void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& 
 	}
 }
 
+void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	static UFunction* DelayFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("Delay"));
+	static UFunction* RetriggerableDelayFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("RetriggerableDelay"));
+
+	if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
+	{
+		if (!Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop)) return;
+
+		UFunction* TargetFn = Call->GetTargetFunction();
+		if (TargetFn == DelayFn || TargetFn == RetriggerableDelayFn)
+		{
+			Suggestions.Push(
+				{
+					ESuggestion::LatentNodeInLoop,
+					Call->NodeGuid
+				}
+			);
+		}
+	}
+}
+
 FAnalyzer::FAnalyzer()
 {
 	Rules.Push(MakeUnique<FExpensiveHotNodeRule>());
 	Rules.Push(MakeUnique<FCastRule>());
 	Rules.Push(MakeUnique<FDeadCodeRule>());
+	Rules.Push(MakeUnique<FLatentNodeInLoopRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
