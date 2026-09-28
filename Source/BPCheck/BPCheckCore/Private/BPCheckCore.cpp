@@ -109,15 +109,21 @@ void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& 
 	if (Context.IsDead(Node->NodeGuid))
 	{
 		bool AnyConnections = false;
+		bool AnyInputs = false;
 
 		for (auto Pin : Node->Pins)
 		{
-			if (Pin->Direction == EGPD_Output && Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
+			if (Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
 			{
 				auto LinkedToCount = Pin->LinkedTo.Num();
 
 				if (LinkedToCount > 0)
 				{
+					if (Pin->Direction == EGPD_Input)
+					{
+						AnyInputs = true;
+					}
+
 					AnyConnections = true;
 					break;
 				}
@@ -126,12 +132,16 @@ void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& 
 
 		if (AnyConnections)
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::Unreachable,
-					Node->NodeGuid
-				}
-			);
+			// This makes the chain warning only for the first disconnected
+			if (!AnyInputs)
+			{
+				Suggestions.Push(
+					{
+						ESuggestion::Unreachable,
+						Node->NodeGuid
+					}
+				);
+			}
 		}
 		else
 		{
