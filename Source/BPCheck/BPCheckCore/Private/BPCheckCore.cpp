@@ -6,6 +6,7 @@
 #include "K2Node_DynamicCast.h"
 #include "K2Node_FunctionEntry.h"
 #include "K2Node_MacroInstance.h"
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
@@ -50,27 +51,158 @@ bool FAnalysisContext::IsDead(FGuid NodeGuid) const
 	return !AliveNodes.Contains(NodeGuid);
 }
 
-void FPrintInHotPathRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
 	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
+	static UFunction* GetAllActorsOfClassFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsOfClass"));
+	static UFunction* GetActorsOfClassFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetActorsOfClass"));
+	static UFunction* GetAllActorsWithTagFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsOfClassWithTag"));
+	static UFunction* GetAllActorsWithInterfaceFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsWithInterface"));
 
 	if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
 	{
-		if (Call->GetTargetFunction() == PrintStringFn)
+		UFunction* TargetFn = Call->GetTargetFunction();
+		if (TargetFn == PrintStringFn)
 		{
 			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
 			{
-				Suggestions.Push({
-				ESuggestion::PrintInHotPath,
-				Call->NodeGuid });
+				Suggestions.Push(
+					{
+						ESuggestion::PrintInHotPath,
+						Call->NodeGuid
+					}
+				);
 			}
+		}
+
+		if (TargetFn == GetAllActorsOfClassFn || TargetFn == GetActorsOfClassFn || TargetFn == GetAllActorsWithTagFn || TargetFn == GetAllActorsWithInterfaceFn)
+		{
+			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
+			{
+				Suggestions.Push(
+					{
+						ESuggestion::HotGetActorsOfClass,
+						Call->NodeGuid
+					}
+				);
+			}
+		}
+	}
+}
+
+void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	if (const UK2Node_DynamicCast* DynamicCast = Cast<UK2Node_DynamicCast>(Node))
+	{
+		UClass* TargetClass = DynamicCast->TargetType;
+		if (TargetClass && Cast<UBlueprintGeneratedClass>(TargetClass))
+		{
+			Suggestions.Push(
+				{
+					ESuggestion::HardCastToBPClass,
+					DynamicCast->NodeGuid
+				}
+			);
+		}
+
+		if (!DynamicCast->IsNodePure())
+		{
+			UEdGraphPin* FailPin = DynamicCast->GetInvalidCastPin();
+			if (FailPin && FailPin->LinkedTo.Num() == 0)
+			{
+				Suggestions.Push(
+					{
+						ESuggestion::CastWithoutFailHandler,
+						DynamicCast->NodeGuid
+					}
+				);
+			}
+		}
+	}
+}
+
+void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	if (FAnalyzer::IsNodePure(Node)) return;
+
+	if (Context.IsDead(Node->NodeGuid))
+	{
+		bool AnyConnections = false;
+		bool AnyInputs = false;
+
+		for (auto Pin : Node->Pins)
+		{
+			if (Pin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec)
+			{
+				auto LinkedToCount = Pin->LinkedTo.Num();
+
+				if (LinkedToCount > 0)
+				{
+					if (Pin->Direction == EGPD_Input)
+					{
+						AnyInputs = true;
+					}
+
+					AnyConnections = true;
+					break;
+				}
+			}
+		}
+
+		if (AnyConnections)
+		{
+			// This makes the chain warning only for the first disconnected
+			if (!AnyInputs)
+			{
+				Suggestions.Push(
+					{
+						ESuggestion::Unreachable,
+						Node->NodeGuid
+					}
+				);
+			}
+		}
+		else
+		{
+			Suggestions.Push(
+				{
+					ESuggestion::Disconnected,
+					Node->NodeGuid
+				}
+			);
+		}
+
+	}
+}
+
+void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	static UFunction* DelayFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("Delay"));
+	static UFunction* RetriggerableDelayFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("RetriggerableDelay"));
+
+	if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
+	{
+		if (!Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop)) return;
+
+		UFunction* TargetFn = Call->GetTargetFunction();
+		if (TargetFn == DelayFn || TargetFn == RetriggerableDelayFn)
+		{
+			Suggestions.Push(
+				{
+					ESuggestion::LatentNodeInLoop,
+					Call->NodeGuid
+				}
+			);
 		}
 	}
 }
 
 FAnalyzer::FAnalyzer()
 {
-	Rules.Push(MakeUnique<FPrintInHotPathRule>());
+	Rules.Push(MakeUnique<FExpensiveHotNodeRule>());
+	Rules.Push(MakeUnique<FCastRule>());
+	Rules.Push(MakeUnique<FDeadCodeRule>());
+	Rules.Push(MakeUnique<FLatentNodeInLoopRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
@@ -89,20 +221,15 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	{
 		for (auto Node : Page->Nodes)
 		{
-			if (Context.IsDead(Node->NodeGuid)) continue;
+			// TODO(Seb): This blocks the Dead node rules, maybe adding an exception there would make sense
+			// or manually checking for deadness in all other rules?
+			// if (!Context.IsPure(Node->NodeGuid) && Context.IsDead(Node->NodeGuid)) continue;
 
 			for (const auto& Rule : Rules)
 			{
 				Rule->Check(Node, Suggestions, Context);
 			}
 		}
-	}
-
-	TArray<FString> Descriptions;
-	for (auto& SuggestionContext : Suggestions)
-	{
-		auto& Info = GetSuggestionInfo(SuggestionContext.Suggestion);
-		Descriptions.Push(FString::Printf(TEXT("(%s) %s"), *Info.SuggestionCode, *Info.SuggestionDescription));
 	}
 
 	FAnalyzerResult Result;
@@ -176,6 +303,16 @@ TArray<FNextExecNode> FAnalyzer::GetNextExecNode(const UEdGraphNode* CurrentNode
 	}
 
 	return Out;
+}
+
+bool FAnalyzer::IsNodePure(const UEdGraphNode* Node)
+{
+	if (const UK2Node* K2Node = Cast<UK2Node>(Node))
+	{
+		return K2Node->IsNodePure();
+	}
+
+	return false;
 }
 
 FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)

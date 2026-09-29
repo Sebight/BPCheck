@@ -202,9 +202,13 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 			const FSuggestionInfo& Info = GetSuggestionInfo(S.Suggestion);
 
 			TSharedPtr<FResultTreeItem> Leaf = MakeShared<FResultTreeItem>();
-			Leaf->Label = FString::Printf(TEXT("%s"), *Info.SuggestionCode);
-			Leaf->Description = FString::Printf(TEXT("%s"), *Info.SuggestionDescription);
 			Leaf->Node = BPCheck::Editor::ResolveNode(BP, S.NodeGuid);
+			Leaf->Label = FString::Printf(TEXT("%s"), *Info.SuggestionCode);
+
+			FStringFormatNamedArguments Args;
+			Args.Add(TEXT("Node"), FStringFormatArg(Leaf->Node->GetNodeTitle(ENodeTitleType::ListView).ToString()));
+			Leaf->Description = FString::Format(*Info.SuggestionDescription, Args);
+
 			Leaf->Severity = EItemSeverity::Warning;
 			Group->Children.Add(Leaf);
 		}
@@ -309,11 +313,15 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 						FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(Resolved);
 				})));
 
-		Msg->AddToken(FTextToken::Create(FText::FromString(Info.SuggestionDescription)));
+		FStringFormatNamedArguments Args;
+		Args.Add(TEXT("Node"), FStringFormatArg(Node->GetNodeTitle(ENodeTitleType::ListView).ToString()));
+		FString Description = FString::Format(*Info.SuggestionDescription, Args);
+
+		Msg->AddToken(FTextToken::Create(FText::FromString(Description)));
 
 		Node->bHasCompilerMessage = true;
 		Node->ErrorType = static_cast<int32>(EMessageSeverity::Info);
-		Node->ErrorMsg = FString::Printf(TEXT("BPCheck: %s\n%s"), *Info.SuggestionCode, *Info.SuggestionDescription);
+		Node->ErrorMsg = FString::Printf(TEXT("BPCheck: %s\n%s"), *Info.SuggestionCode, *Description);
 
 		FMessageLog("BPCheck").AddMessage(Msg);
 	}

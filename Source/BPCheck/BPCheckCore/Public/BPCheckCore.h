@@ -62,6 +62,7 @@ public:
 	void MarkNodeAlive(FGuid NodeGuid);
 
 	bool IsDead(FGuid NodeGuid) const;
+
 private:
 	TSet<FGuid> AliveNodes;
 	TMap<FGuid, TSet<ENodeFlag>> NodeData;
@@ -75,7 +76,25 @@ public:
 	virtual void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) = 0;
 };
 
-class BPCHECKCORE_API FPrintInHotPathRule : public FAnalysisRule
+class BPCHECKCORE_API FExpensiveHotNodeRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FCastRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FDeadCodeRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FLatentNodeInLoopRule : public FAnalysisRule
 {
 public:
 	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
@@ -99,6 +118,7 @@ public:
 	FAnalyzerResult Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data);
 	FAnalyzerResult Analyze(const UBlueprint* Blueprint);
 
+	static bool IsNodePure(const UEdGraphNode* Node);
 private:
 	// I think these could be static'd and moved into a namespace
 	TSet<UEdGraphNode*> CollectEntryPoints(const UEdGraph* Graph) const;
