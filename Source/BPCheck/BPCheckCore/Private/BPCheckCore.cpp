@@ -59,38 +59,30 @@ TSet<EFunctionEffect> FAnalysisContext::EffectsOf(UFunction* Fn) const
 void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
 	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
-	static UFunction* GetAllActorsOfClassFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsOfClass"));
-	static UFunction* GetActorsOfClassFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetActorsOfClass"));
-	static UFunction* GetAllActorsWithTagFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsOfClassWithTag"));
-	static UFunction* GetAllActorsWithInterfaceFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsWithInterface"));
 
 	if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
 	{
+		bool InHotPath = Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop);
+
 		UFunction* TargetFn = Call->GetTargetFunction();
-		if (TargetFn == PrintStringFn)
+		if (InHotPath && TargetFn == PrintStringFn)
 		{
-			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
-			{
-				Suggestions.Push(
-					{
-						ESuggestion::PrintInHotPath,
-						Call->NodeGuid
-					}
-				);
-			}
+			Suggestions.Push(
+				{
+					ESuggestion::PrintInHotPath,
+					Call->NodeGuid
+				}
+			);
 		}
 
-		if (TargetFn == GetAllActorsOfClassFn || TargetFn == GetActorsOfClassFn || TargetFn == GetAllActorsWithTagFn || TargetFn == GetAllActorsWithInterfaceFn)
+		if (InHotPath && Context.EffectsOf(TargetFn).Contains(EFunctionEffect::ExpensiveActorQuery))
 		{
-			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
-			{
-				Suggestions.Push(
-					{
-						ESuggestion::HotGetActorsOfClass,
-						Call->NodeGuid
-					}
-				);
-			}
+			Suggestions.Push(
+				{
+					ESuggestion::HotGetActorsOfClass,
+					Call->NodeGuid
+				}
+			);
 		}
 	}
 }
@@ -182,15 +174,12 @@ void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& 
 
 void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
-	static UFunction* DelayFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("Delay"));
-	static UFunction* RetriggerableDelayFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("RetriggerableDelay"));
-
 	if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
 	{
 		if (!Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop)) return;
 
 		UFunction* TargetFn = Call->GetTargetFunction();
-		if (TargetFn == DelayFn || TargetFn == RetriggerableDelayFn)
+		if (Context.EffectsOf(TargetFn).Contains(EFunctionEffect::Latent))
 		{
 			Suggestions.Push(
 				{
@@ -223,6 +212,11 @@ TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
 	}
 
 	return ComputeBPFunctionEffects(Fn);
+}
+
+void FEffectResolver::ClearCache()
+{
+	EffectsCache.Empty();
 }
 
 void FEffectResolver::BuildKnownEffects()
@@ -263,18 +257,39 @@ TSet<EFunctionEffect> FEffectResolver::ComputeBPFunctionEffects(UFunction* Fn)
 
 	if (!Graph) return {};
 
-	TSet<EFunctionEffect> Acc;
-
+	UEdGraphNode* Entry = nullptr;
 	for (UEdGraphNode* Node : Graph->Nodes)
 	{
-		if (UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
+		if (Node && Node->IsA<UK2Node_FunctionEntry>())
 		{
-			if (UFunction* Target = Call->GetTargetFunction())
-			{
-				Acc.Append(EffectsOf(Target));
-			}
+			Entry = Node;
+			break;
 		}
 	}
+
+	if (!Entry) return {};
+
+	TSet<EFunctionEffect> Acc;
+
+	TFunction<void(UEdGraphNode*)> Walk;
+	Walk = [&](UEdGraphNode* Node)
+		{
+			if (UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
+			{
+				if (UFunction* Target = Call->GetTargetFunction())
+				{
+					Acc.Append(EffectsOf(Target));
+				}
+			}
+
+			for (const FNextExecNode& Next : FAnalyzer::GetNextExecNode(Node))
+			{
+				Walk(Next.Node);
+			}
+		};
+
+	Walk(Entry);
+
 
 	EffectsCache.Add(Fn, Acc);
 	return Acc;
@@ -312,6 +327,8 @@ FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationCont
 
 FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 {
+	EffectResolver.ClearCache();
+
 	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *Blueprint->GetName());
 
 	const FAnalysisContext Context = BuildContext(Blueprint);

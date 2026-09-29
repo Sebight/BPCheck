@@ -127,6 +127,7 @@ class FEffectResolver
 public:
 	TSet<EFunctionEffect> EffectsOf(UFunction* Fn);
 
+	void ClearCache();
 private:
 	TMap<UFunction*, TSet<EFunctionEffect>> KnownEffects;
 	TMap<UFunction*, TSet<EFunctionEffect>> EffectsCache;
@@ -150,11 +151,11 @@ public:
 	FAnalyzerResult Analyze(const UBlueprint* Blueprint);
 
 	static bool IsNodePure(const UEdGraphNode* Node);
+	static TArray<FNextExecNode> GetNextExecNode(const UEdGraphNode* CurrentNode);
 private:
 	// I think these could be static'd and moved into a namespace
 	TSet<UEdGraphNode*> CollectEntryPoints(const UEdGraph* Graph) const;
 	UEdGraphNode* FindTick(const UBlueprint* Blueprint);
-	TArray<FNextExecNode> GetNextExecNode(const UEdGraphNode* CurrentNode);
 
 	FAnalysisContext BuildContext(const UBlueprint* Blueprint);
 
