@@ -349,6 +349,21 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 		}
 	}
 
+	for (auto& Page : Blueprint->FunctionGraphs)
+	{
+		for (auto Node : Page->Nodes)
+		{
+			// TODO(Seb): This blocks the Dead node rules, maybe adding an exception there would make sense
+			// or manually checking for deadness in all other rules?
+			// if (!Context.IsPure(Node->NodeGuid) && Context.IsDead(Node->NodeGuid)) continue;
+
+			for (const auto& Rule : Rules)
+			{
+				Rule->Check(Node, Suggestions, Context);
+			}
+		}
+	}
+
 	FAnalyzerResult Result;
 	Result.Success = true;
 	Result.Suggestions = MoveTemp(Suggestions);
