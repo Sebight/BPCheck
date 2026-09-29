@@ -51,6 +51,11 @@ bool FAnalysisContext::IsDead(FGuid NodeGuid) const
 	return !AliveNodes.Contains(NodeGuid);
 }
 
+TSet<EFunctionEffect> FAnalysisContext::EffectsOf(UFunction* Fn) const
+{
+	return EffectResolver->EffectsOf(Fn);
+}
+
 void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
 	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
@@ -195,6 +200,101 @@ void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 			);
 		}
 	}
+}
+
+TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
+{
+	BuildKnownEffects();
+
+	if (!Fn) return {};
+	if (KnownEffects.Contains(Fn))
+	{
+		return *KnownEffects.Find(Fn);
+	}
+
+	if (EffectsCache.Contains(Fn))
+	{
+		return *EffectsCache.Find(Fn);
+	}
+
+	if (!Fn->IsInBlueprint())
+	{
+		EffectsCache.Add(Fn, {});
+	}
+
+	return ComputeBPFunctionEffects(Fn);
+}
+
+void FEffectResolver::BuildKnownEffects()
+{
+	if (bKnownEffectsBuilt) return;
+	bKnownEffectsBuilt = true;
+
+	auto AddEffect = [&](UClass* Class, const TCHAR* Name, EFunctionEffect Effect)
+		{
+			if (UFunction* Func = Class->FindFunctionByName(Name))
+			{
+				KnownEffects.Add(Func, { Effect });
+			}
+			else
+			{
+				UE_LOG(LogBPCheckCore, Warning, TEXT("KnownEffects: Function %s could not be resolved."), Name);
+			}
+		};
+
+	UClass* Sys = UKismetSystemLibrary::StaticClass();
+	UClass* Gameplay = UGameplayStatics::StaticClass();
+
+	AddEffect(Sys, TEXT("Delay"), EFunctionEffect::Latent);
+	AddEffect(Sys, TEXT("RetriggerableDelay"), EFunctionEffect::Latent);
+	AddEffect(Gameplay, TEXT("GetAllActorsOfClass"), EFunctionEffect::ExpensiveActorQuery);
+	AddEffect(Gameplay, TEXT("GetActorsOfClass"), EFunctionEffect::ExpensiveActorQuery);
+	AddEffect(Gameplay, TEXT("GetAllActorsOfClassWithTag"), EFunctionEffect::ExpensiveActorQuery);
+	AddEffect(Gameplay, TEXT("GetAllActorsWithInterface"), EFunctionEffect::ExpensiveActorQuery);
+	AddEffect(Sys, TEXT("PrintString"), EFunctionEffect::DebugSideEffect);
+}
+
+TSet<EFunctionEffect> FEffectResolver::ComputeBPFunctionEffects(UFunction* Fn)
+{
+	// This avoids re-entry from the recursive call
+	EffectsCache.Add(Fn, {});
+
+	UEdGraph* Graph = FindFunctionGraph(Fn);
+
+	if (!Graph) return {};
+
+	TSet<EFunctionEffect> Acc;
+
+	for (UEdGraphNode* Node : Graph->Nodes)
+	{
+		if (UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
+		{
+			if (UFunction* Target = Call->GetTargetFunction())
+			{
+				Acc.Append(EffectsOf(Target));
+			}
+		}
+	}
+
+	EffectsCache.Add(Fn, Acc);
+	return Acc;
+}
+
+UEdGraph* FEffectResolver::FindFunctionGraph(UFunction* Fn)
+{
+	UClass* Owner = Fn->GetOwnerClass();
+	UBlueprint* BP = UBlueprint::GetBlueprintFromClass(Owner);
+	if (!BP) return nullptr;
+
+	for (UEdGraph* Graph : BP->FunctionGraphs)
+	{
+		if (Graph && Graph->GetFName() == Fn->GetFName())
+		{
+			return Graph;
+		}
+	}
+
+	return nullptr;
 }
 
 FAnalyzer::FAnalyzer()
@@ -376,6 +476,8 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 	{
 		WalkNode(Entry, {}, Context);
 	}
+
+	Context.EffectResolver = &EffectResolver;
 
 	return Context;
 }
