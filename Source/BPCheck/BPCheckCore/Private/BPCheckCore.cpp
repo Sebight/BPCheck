@@ -58,14 +58,12 @@ TSet<EFunctionEffect> FAnalysisContext::EffectsOf(UFunction* Fn) const
 
 void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
-	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
-
 	if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
 	{
 		bool InHotPath = Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop);
 
 		UFunction* TargetFn = Call->GetTargetFunction();
-		if (InHotPath && TargetFn == PrintStringFn)
+		if (InHotPath && Context.EffectsOf(TargetFn).Contains(EFunctionEffect::DebugSideEffect))
 		{
 			Suggestions.Push(
 				{
