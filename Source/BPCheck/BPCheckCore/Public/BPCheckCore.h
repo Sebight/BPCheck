@@ -53,6 +53,9 @@ enum class ENodeFlag
 	InALoop = 1
 };
 
+class FEffectResolver;
+enum class EFunctionEffect;
+
 class FAnalysisContext
 {
 public:
@@ -62,12 +65,17 @@ public:
 	void MarkNodeAlive(FGuid NodeGuid);
 
 	bool IsDead(FGuid NodeGuid) const;
+	TSet<EFunctionEffect> EffectsOf(UFunction* Fn) const;
 
 private:
+	friend class FAnalyzer;
+
 	TSet<FGuid> AliveNodes;
 	TMap<FGuid, TSet<ENodeFlag>> NodeData;
+	FEffectResolver* EffectResolver = nullptr;
 };
 
+#pragma region Rules
 class BPCHECKCORE_API FAnalysisRule
 {
 public:
@@ -99,11 +107,35 @@ class BPCHECKCORE_API FLatentNodeInLoopRule : public FAnalysisRule
 public:
 	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
 };
+#pragma endregion
 
 struct FNextExecNode
 {
 	UEdGraphNode* Node;
 	uint8 PinIndex;
+};
+
+enum class EFunctionEffect
+{
+	ExpensiveActorQuery = 0,
+	Latent,
+	DebugSideEffect
+};
+
+class FEffectResolver
+{
+public:
+	TSet<EFunctionEffect> EffectsOf(UFunction* Fn);
+
+	void ClearCache();
+private:
+	TMap<UFunction*, TSet<EFunctionEffect>> KnownEffects;
+	TMap<UFunction*, TSet<EFunctionEffect>> EffectsCache;
+	bool bKnownEffectsBuilt = false;
+
+	void BuildKnownEffects();
+	TSet<EFunctionEffect> ComputeBPFunctionEffects(UFunction* Fn);
+	UEdGraph* FindFunctionGraph(UFunction* Fn);
 };
 
 class BPCHECKCORE_API FAnalyzer
@@ -119,14 +151,15 @@ public:
 	FAnalyzerResult Analyze(const UBlueprint* Blueprint);
 
 	static bool IsNodePure(const UEdGraphNode* Node);
+	static TArray<FNextExecNode> GetNextExecNode(const UEdGraphNode* CurrentNode);
 private:
 	// I think these could be static'd and moved into a namespace
 	TSet<UEdGraphNode*> CollectEntryPoints(const UEdGraph* Graph) const;
 	UEdGraphNode* FindTick(const UBlueprint* Blueprint);
-	TArray<FNextExecNode> GetNextExecNode(const UEdGraphNode* CurrentNode);
 
 	FAnalysisContext BuildContext(const UBlueprint* Blueprint);
 
 private:
 	TArray<TUniquePtr<FAnalysisRule>> Rules;
+	FEffectResolver EffectResolver;
 };

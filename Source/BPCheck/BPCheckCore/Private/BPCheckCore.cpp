@@ -51,41 +51,36 @@ bool FAnalysisContext::IsDead(FGuid NodeGuid) const
 	return !AliveNodes.Contains(NodeGuid);
 }
 
+TSet<EFunctionEffect> FAnalysisContext::EffectsOf(UFunction* Fn) const
+{
+	return EffectResolver->EffectsOf(Fn);
+}
+
 void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
-	static UFunction* PrintStringFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
-	static UFunction* GetAllActorsOfClassFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsOfClass"));
-	static UFunction* GetActorsOfClassFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetActorsOfClass"));
-	static UFunction* GetAllActorsWithTagFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsOfClassWithTag"));
-	static UFunction* GetAllActorsWithInterfaceFn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("GetAllActorsWithInterface"));
-
 	if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
 	{
+		bool InHotPath = Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop);
+
 		UFunction* TargetFn = Call->GetTargetFunction();
-		if (TargetFn == PrintStringFn)
+		if (InHotPath && Context.EffectsOf(TargetFn).Contains(EFunctionEffect::DebugSideEffect))
 		{
-			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
-			{
-				Suggestions.Push(
-					{
-						ESuggestion::PrintInHotPath,
-						Call->NodeGuid
-					}
-				);
-			}
+			Suggestions.Push(
+				{
+					ESuggestion::PrintInHotPath,
+					Call->NodeGuid
+				}
+			);
 		}
 
-		if (TargetFn == GetAllActorsOfClassFn || TargetFn == GetActorsOfClassFn || TargetFn == GetAllActorsWithTagFn || TargetFn == GetAllActorsWithInterfaceFn)
+		if (InHotPath && Context.EffectsOf(TargetFn).Contains(EFunctionEffect::ExpensiveActorQuery))
 		{
-			if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
-			{
-				Suggestions.Push(
-					{
-						ESuggestion::HotGetActorsOfClass,
-						Call->NodeGuid
-					}
-				);
-			}
+			Suggestions.Push(
+				{
+					ESuggestion::HotGetActorsOfClass,
+					Call->NodeGuid
+				}
+			);
 		}
 	}
 }
@@ -177,15 +172,12 @@ void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& 
 
 void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
 {
-	static UFunction* DelayFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("Delay"));
-	static UFunction* RetriggerableDelayFn = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("RetriggerableDelay"));
-
 	if (const UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
 	{
 		if (!Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop)) return;
 
 		UFunction* TargetFn = Call->GetTargetFunction();
-		if (TargetFn == DelayFn || TargetFn == RetriggerableDelayFn)
+		if (Context.EffectsOf(TargetFn).Contains(EFunctionEffect::Latent))
 		{
 			Suggestions.Push(
 				{
@@ -195,6 +187,127 @@ void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 			);
 		}
 	}
+}
+
+TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
+{
+	BuildKnownEffects();
+
+	if (!Fn) return {};
+	if (KnownEffects.Contains(Fn))
+	{
+		return *KnownEffects.Find(Fn);
+	}
+
+	if (EffectsCache.Contains(Fn))
+	{
+		return *EffectsCache.Find(Fn);
+	}
+
+	if (!Fn->IsInBlueprint())
+	{
+		EffectsCache.Add(Fn, {});
+	}
+
+	return ComputeBPFunctionEffects(Fn);
+}
+
+void FEffectResolver::ClearCache()
+{
+	EffectsCache.Empty();
+}
+
+void FEffectResolver::BuildKnownEffects()
+{
+	if (bKnownEffectsBuilt) return;
+	bKnownEffectsBuilt = true;
+
+	auto AddEffect = [&](UClass* Class, const TCHAR* Name, EFunctionEffect Effect)
+		{
+			if (UFunction* Func = Class->FindFunctionByName(Name))
+			{
+				KnownEffects.Add(Func, { Effect });
+			}
+			else
+			{
+				UE_LOG(LogBPCheckCore, Warning, TEXT("KnownEffects: Function %s could not be resolved."), Name);
+			}
+		};
+
+	UClass* Sys = UKismetSystemLibrary::StaticClass();
+	UClass* Gameplay = UGameplayStatics::StaticClass();
+
+	AddEffect(Sys, TEXT("Delay"), EFunctionEffect::Latent);
+	AddEffect(Sys, TEXT("RetriggerableDelay"), EFunctionEffect::Latent);
+	AddEffect(Gameplay, TEXT("GetAllActorsOfClass"), EFunctionEffect::ExpensiveActorQuery);
+	AddEffect(Gameplay, TEXT("GetActorsOfClass"), EFunctionEffect::ExpensiveActorQuery);
+	AddEffect(Gameplay, TEXT("GetAllActorsOfClassWithTag"), EFunctionEffect::ExpensiveActorQuery);
+	AddEffect(Gameplay, TEXT("GetAllActorsWithInterface"), EFunctionEffect::ExpensiveActorQuery);
+	AddEffect(Sys, TEXT("PrintString"), EFunctionEffect::DebugSideEffect);
+}
+
+TSet<EFunctionEffect> FEffectResolver::ComputeBPFunctionEffects(UFunction* Fn)
+{
+	// This avoids re-entry from the recursive call
+	EffectsCache.Add(Fn, {});
+
+	UEdGraph* Graph = FindFunctionGraph(Fn);
+
+	if (!Graph) return {};
+
+	UEdGraphNode* Entry = nullptr;
+	for (UEdGraphNode* Node : Graph->Nodes)
+	{
+		if (Node && Node->IsA<UK2Node_FunctionEntry>())
+		{
+			Entry = Node;
+			break;
+		}
+	}
+
+	if (!Entry) return {};
+
+	TSet<EFunctionEffect> Acc;
+
+	TFunction<void(UEdGraphNode*)> Walk;
+	Walk = [&](UEdGraphNode* Node)
+		{
+			if (UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
+			{
+				if (UFunction* Target = Call->GetTargetFunction())
+				{
+					Acc.Append(EffectsOf(Target));
+				}
+			}
+
+			for (const FNextExecNode& Next : FAnalyzer::GetNextExecNode(Node))
+			{
+				Walk(Next.Node);
+			}
+		};
+
+	Walk(Entry);
+
+
+	EffectsCache.Add(Fn, Acc);
+	return Acc;
+}
+
+UEdGraph* FEffectResolver::FindFunctionGraph(UFunction* Fn)
+{
+	UClass* Owner = Fn->GetOwnerClass();
+	UBlueprint* BP = UBlueprint::GetBlueprintFromClass(Owner);
+	if (!BP) return nullptr;
+
+	for (UEdGraph* Graph : BP->FunctionGraphs)
+	{
+		if (Graph && Graph->GetFName() == Fn->GetFName())
+		{
+			return Graph;
+		}
+	}
+
+	return nullptr;
 }
 
 FAnalyzer::FAnalyzer()
@@ -212,12 +325,29 @@ FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationCont
 
 FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 {
+	EffectResolver.ClearCache();
+
 	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *Blueprint->GetName());
 
 	const FAnalysisContext Context = BuildContext(Blueprint);
 
 	TArray<FSuggestionContext> Suggestions;
 	for (auto& Page : Blueprint->UbergraphPages)
+	{
+		for (auto Node : Page->Nodes)
+		{
+			// TODO(Seb): This blocks the Dead node rules, maybe adding an exception there would make sense
+			// or manually checking for deadness in all other rules?
+			// if (!Context.IsPure(Node->NodeGuid) && Context.IsDead(Node->NodeGuid)) continue;
+
+			for (const auto& Rule : Rules)
+			{
+				Rule->Check(Node, Suggestions, Context);
+			}
+		}
+	}
+
+	for (auto& Page : Blueprint->FunctionGraphs)
 	{
 		for (auto Node : Page->Nodes)
 		{
@@ -376,6 +506,8 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 	{
 		WalkNode(Entry, {}, Context);
 	}
+
+	Context.EffectResolver = &EffectResolver;
 
 	return Context;
 }
