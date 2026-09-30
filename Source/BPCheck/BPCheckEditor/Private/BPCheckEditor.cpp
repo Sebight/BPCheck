@@ -313,6 +313,8 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 
 	for (auto& Suggestion : Result.Suggestions)
 	{
+		if (Suggestion.Suppressed) continue;
+
 		UEdGraphNode* Node = BPCheck::Editor::ResolveNode(CompilationContext.Blueprint, Suggestion.NodeGuid);
 		if (!Node)
 		{
@@ -346,7 +348,13 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		FMessageLog("BPCheck").AddMessage(Msg);
 	}
 
-	FModuleManager::GetModuleChecked<FBPCheckEditorModule>("BPCheckEditor").SetSuggestionsForBlueprint(CompilationContext.Blueprint, Result.Suggestions);
+	TArray<FSuggestionContext> ActiveSuggestions = Result.Suggestions;
+	ActiveSuggestions.RemoveAll([](const FSuggestionContext& S)
+		{
+			return S.Suppressed;
+		});
+
+	FModuleManager::GetModuleChecked<FBPCheckEditorModule>("BPCheckEditor").SetSuggestionsForBlueprint(CompilationContext.Blueprint, ActiveSuggestions);
 
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }
