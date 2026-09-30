@@ -45,7 +45,8 @@ public class BPCheckEditor : ModuleRules
                 "KismetCompiler",
 				"Json",
 				"JsonUtilities",
-                "InputCore"
+                "InputCore",
+				"PropertyEditor"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

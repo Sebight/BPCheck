@@ -7,6 +7,7 @@
 #include "Commandlets/Commandlet.h"
 
 #include "BPCheckCore.h"
+#include "IDetailCustomization.h"
 
 #include "BPCheckEditor.generated.h"
 
@@ -87,4 +88,15 @@ class BPCHECKEDITOR_API UBPCheckCommandlet : public UCommandlet
 	GENERATED_BODY()
 public:
 	virtual int32 Main(const FString&) override;
+};
+
+class FBPCheckSettingsCustomization : public IDetailCustomization
+{
+public:
+	static TSharedRef<IDetailCustomization> MakeInstance()
+	{
+		return MakeShared<FBPCheckSettingsCustomization>();
+	}
+
+	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
 };

@@ -4,6 +4,7 @@
 #include "ToolMenus.h"
 #include "BPCheckCore.h"
 #include "BlueprintCompilationManager.h"
+#include "DetailCategoryBuilder.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "JsonObjectConverter.h"
 #include "ProfilingDebugging/ScopedTimers.h"
@@ -15,6 +16,11 @@
 #include "Widgets/Views/SExpanderArrow.h"
 #include "Widgets/Images/SImage.h"
 #include "Styling/StyleColors.h"
+#include "DetailLayoutBuilder.h"
+#include "DetailWidgetRow.h"
+#include "Suggestions.h"
+
+#include "Suggestions.generated.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -49,12 +55,26 @@ void FBPCheckEditorModule::StartupModule()
 	FBlueprintCompilationManager::RegisterCompilerExtension(UBlueprint::StaticClass(), Extension);
 
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(BPCheckTabId, FOnSpawnTab::CreateRaw(this, &FBPCheckEditorModule::CreateSuggestionsTab)).SetDisplayName(LOCTEXT("BPCheckSuggestionsList", "BPCheck Suggestions"));
+
+	FPropertyEditorModule& PE =
+		FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+	PE.RegisterCustomClassLayout(
+		UBPCheckSettings::StaticClass()->GetFName(),
+		FOnGetDetailCustomizationInstance::CreateStatic(
+			&FBPCheckSettingsCustomization::MakeInstance));
+	PE.NotifyCustomizationModuleChanged();
 }
 
 void FBPCheckEditorModule::ShutdownModule()
 {
 	UToolMenus::UnRegisterStartupCallback(this);
 	UToolMenus::UnregisterOwner(this);
+
+	if (FModuleManager::Get().IsModuleLoaded("PropertyEditor"))
+	{
+		FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor")
+			.UnregisterCustomClassLayout(UBPCheckSettings::StaticClass()->GetFName());
+	}
 }
 
 void FBPCheckEditorModule::CreateMenuItem()
@@ -373,6 +393,35 @@ int32 UBPCheckCommandlet::Main(const FString& String)
 	UE_LOG(LogBPCheckEditor, Log, TEXT("%s"), *Json);
 
 	return 0;
+}
+
+void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
+{
+	TSharedRef<IPropertyHandle> MapHandle =
+		B.GetProperty(GET_MEMBER_NAME_CHECKED(UBPCheckSettings, SuggestionEnabled));
+	B.HideProperty(MapHandle);
+
+	IDetailCategoryBuilder& Cat = B.EditCategory("Suggestions");
+	const UEnum* Enum = StaticEnum<ESuggestion>();
+
+	for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+	{
+		const ESuggestion Suggestion = static_cast<ESuggestion>(Enum->GetValueByIndex(i));
+		Cat.AddCustomRow(Enum->GetDisplayNameTextByIndex(i))
+			.NameContent()[SNew(STextBlock)
+			.Text(Enum->GetDisplayNameTextByIndex(i))
+			.ToolTipText(FText::FromString(GetSuggestionInfo(Suggestion).SuggestionDescription))]
+			.ValueContent()[SNew(SCheckBox)
+			.IsChecked_Lambda([Suggestion] { return GetDefault<UBPCheckSettings>()->IsSuggestionEnabled(Suggestion)
+				? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+			.OnCheckStateChanged_Lambda([Suggestion](ECheckBoxState S)
+				{
+					UBPCheckSettings* Set = GetMutableDefault<UBPCheckSettings>();
+					Set->SuggestionEnabled.Add(Suggestion, S == ECheckBoxState::Checked);
+					Set->SaveConfig();
+					// Set->OnSettingsChanged.Broadcast();
+				})];
+	}
 }
 
 #undef LOCTEXT_NAMESPACE
