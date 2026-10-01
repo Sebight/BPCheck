@@ -367,14 +367,6 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 			}
 		}
 	}
-	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
-	for (auto& Suggestion : Suggestions)
-	{
-		if (!Settings->IsSuggestionEnabled(Suggestion.Suggestion))
-		{
-			Suggestion.Suppressed = true;
-		}
-	}
 
 	FAnalyzerResult Result;
 	Result.Success = true;

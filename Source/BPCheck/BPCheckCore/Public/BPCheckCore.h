@@ -24,7 +24,6 @@ struct FSuggestionContext
 
 	ESuggestion Suggestion;
 	FGuid NodeGuid;
-	bool Suppressed;
 };
 
 UCLASS(config = BPCheck, DefaultConfig, meta = (DisplayName = "BPCheck"))
@@ -41,6 +40,9 @@ public:
 	TMap<ESuggestion, bool> SuggestionEnabled;
 
 	bool IsSuggestionEnabled(ESuggestion Suggestion) const;
+
+	DECLARE_MULTICAST_DELEGATE(FOnBPCheckSettingsChanged);
+	FOnBPCheckSettingsChanged OnSettingsChanged;
 };
 
 USTRUCT()

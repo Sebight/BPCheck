@@ -29,15 +29,18 @@ public:
 
 	void CreateMenuItem();
 	void OnButtonClicked();
+	void OnSettingsChanged();
 
 	void SetSuggestionsForBlueprint(const UBlueprint* Blueprint, TArray<FSuggestionContext>& NewSuggestions);
 
 private:
 	TSharedRef<SDockTab> CreateSuggestionsTab(const FSpawnTabArgs&);
 	TArray<TSharedPtr<FResultTreeItem>> BuildTree() const;
+	void ApplyNodeMarkers();
 
 	TWeakPtr<SBPCheckSuggestionsPanel> SuggestionsPanel;
 	TMap<const UBlueprint*, TArray<FSuggestionContext>> Suggestions;
+	FDelegateHandle SettingsChangedHandle;
 };
 
 enum class EItemSeverity : uint8 { Info, Warning, Error, Group };

@@ -63,6 +63,8 @@ void FBPCheckEditorModule::StartupModule()
 		FOnGetDetailCustomizationInstance::CreateStatic(
 			&FBPCheckSettingsCustomization::MakeInstance));
 	PE.NotifyCustomizationModuleChanged();
+
+	SettingsChangedHandle = GetMutableDefault<UBPCheckSettings>()->OnSettingsChanged.AddRaw(this, &FBPCheckEditorModule::OnSettingsChanged);
 }
 
 void FBPCheckEditorModule::ShutdownModule()
@@ -75,6 +77,9 @@ void FBPCheckEditorModule::ShutdownModule()
 		FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor")
 			.UnregisterCustomClassLayout(UBPCheckSettings::StaticClass()->GetFName());
 	}
+
+	if (UObjectInitialized())
+		GetMutableDefault<UBPCheckSettings>()->OnSettingsChanged.Remove(SettingsChangedHandle);
 }
 
 void FBPCheckEditorModule::CreateMenuItem()
@@ -96,6 +101,16 @@ void FBPCheckEditorModule::CreateMenuItem()
 void FBPCheckEditorModule::OnButtonClicked()
 {
 	FGlobalTabmanager::Get()->TryInvokeTab(BPCheckTabId);
+}
+
+void FBPCheckEditorModule::OnSettingsChanged()
+{
+	if (TSharedPtr<SBPCheckSuggestionsPanel> P = SuggestionsPanel.Pin())
+	{
+		P->SetResults(BuildTree());
+	}
+
+	ApplyNodeMarkers();
 }
 
 void FBPCheckEditorModule::SetSuggestionsForBlueprint(const UBlueprint* Blueprint, TArray<FSuggestionContext>& NewSuggestions)
@@ -206,6 +221,7 @@ private:
 TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 {
 	TArray<TSharedPtr<FResultTreeItem>> Roots;
+	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
 
 	for (const auto& Pair : Suggestions)
 	{
@@ -213,12 +229,16 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 		if (!BP || Pair.Value.Num() == 0) continue;
 
 		TSharedPtr<FResultTreeItem> Group = MakeShared<FResultTreeItem>();
-		Group->Label = FString::Printf(TEXT("%s (%d)"), *BP->GetName(), Pair.Value.Num());
 		Group->bIsGroup = true;
 		Group->Severity = EItemSeverity::Group;
 
 		for (const FSuggestionContext& S : Pair.Value)
 		{
+			if (!Settings->IsSuggestionEnabled(S.Suggestion))
+			{
+				continue;
+			}
+
 			const FSuggestionInfo& Info = GetSuggestionInfo(S.Suggestion);
 
 			TSharedPtr<FResultTreeItem> Leaf = MakeShared<FResultTreeItem>();
@@ -232,9 +252,53 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 			Leaf->Severity = EItemSeverity::Warning;
 			Group->Children.Add(Leaf);
 		}
+
+		if (Group->Children.Num() == 0) continue;
+		Group->Label = FString::Printf(TEXT("%s (%d)"), *BP->GetName(), Group->Children.Num());
 		Roots.Add(Group);
 	}
 	return Roots;
+}
+
+void FBPCheckEditorModule::ApplyNodeMarkers()
+{
+	TSet<UEdGraph*> Dirtied;
+	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
+
+	for (const auto& Pair : Suggestions)
+	{
+		const UBlueprint* BP = Pair.Key;
+		if (!BP) continue;
+
+		for (const auto& Suggestion : Pair.Value)
+		{
+			UEdGraphNode* Node = BPCheck::Editor::ResolveNode(BP, Suggestion.NodeGuid);
+
+			if (Settings->IsSuggestionEnabled(Suggestion.Suggestion))
+			{
+				const FSuggestionInfo& Info = GetSuggestionInfo(Suggestion.Suggestion);
+				FStringFormatNamedArguments Args;
+				Args.Add(TEXT("Node"), FStringFormatArg(Node->GetNodeTitle(ENodeTitleType::ListView).ToString()));
+				const FString Desc = FString::Format(*Info.SuggestionDescription, Args);
+
+				Node->bHasCompilerMessage = true;
+				Node->ErrorType = static_cast<int32>(EMessageSeverity::Info);
+				Node->ErrorMsg = FString::Printf(TEXT("BPCheck: %s\n%s"), *Info.SuggestionCode, *Desc);
+				Dirtied.Add(Node->GetGraph());
+			}
+			else if (Node->ErrorMsg.StartsWith(TEXT("BPCheck:")))
+			{
+				Node->bHasCompilerMessage = false;
+				Node->ErrorMsg.Empty();
+				Dirtied.Add(Node->GetGraph());
+			}
+		}
+	}
+
+	for (UEdGraph* Graph : Dirtied)
+	{
+		Graph->NotifyGraphChanged();
+	}
 }
 
 void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
@@ -310,10 +374,14 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		Result = Analyzer.Analyze(CompilationContext, Data);
 	}
 
+	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
 
 	for (auto& Suggestion : Result.Suggestions)
 	{
-		if (Suggestion.Suppressed) continue;
+		if (!Settings->IsSuggestionEnabled(Suggestion.Suggestion))
+		{
+			continue;
+		}
 
 		UEdGraphNode* Node = BPCheck::Editor::ResolveNode(CompilationContext.Blueprint, Suggestion.NodeGuid);
 		if (!Node)
@@ -348,13 +416,7 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		FMessageLog("BPCheck").AddMessage(Msg);
 	}
 
-	TArray<FSuggestionContext> ActiveSuggestions = Result.Suggestions;
-	ActiveSuggestions.RemoveAll([](const FSuggestionContext& S)
-		{
-			return S.Suppressed;
-		});
-
-	FModuleManager::GetModuleChecked<FBPCheckEditorModule>("BPCheckEditor").SetSuggestionsForBlueprint(CompilationContext.Blueprint, ActiveSuggestions);
+	FModuleManager::GetModuleChecked<FBPCheckEditorModule>("BPCheckEditor").SetSuggestionsForBlueprint(CompilationContext.Blueprint, Result.Suggestions);
 
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }
@@ -427,7 +489,7 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 					UBPCheckSettings* Set = GetMutableDefault<UBPCheckSettings>();
 					Set->SuggestionEnabled.Add(Suggestion, S == ECheckBoxState::Checked);
 					Set->SaveConfig();
-					// Set->OnSettingsChanged.Broadcast();
+					Set->OnSettingsChanged.Broadcast();
 				})];
 	}
 }
