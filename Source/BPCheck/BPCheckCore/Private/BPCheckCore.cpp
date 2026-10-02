@@ -23,6 +23,12 @@ void FBPCheckCoreModule::ShutdownModule()
 
 }
 
+bool UBPCheckSettings::IsSuggestionEnabled(ESuggestion Suggestion) const
+{
+	const bool* Found = SuggestionEnabled.Find(Suggestion);
+	return Found ? *Found : true;
+}
+
 void FAnalysisContext::AddFlags(FGuid NodeGuid, TSet<ENodeFlag> Flags)
 {
 	if (!NodeData.Contains(NodeGuid))

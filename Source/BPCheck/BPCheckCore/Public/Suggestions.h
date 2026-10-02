@@ -4,15 +4,16 @@
 
 using FSuggestionCode = FString;
 
-enum class ESuggestion
+UENUM()
+enum class ESuggestion : uint8
 {
-	PrintInHotPath,
-	HardCastToBPClass,
-	CastWithoutFailHandler,
-	Disconnected,
-	Unreachable,
-	HotGetActorsOfClass,
-	LatentNodeInLoop
+	PrintInHotPath			UMETA(DisplayName = "Print In Hot Path"),
+	HardCastToBPClass		UMETA(DisplayName = "Hard Cast To BP Class"),
+	CastWithoutFailHandler	UMETA(DisplayName = "Cast Without Fail Handler"),
+	Disconnected			UMETA(DisplayName = "Disconnected Node"),
+	Unreachable				UMETA(DisplayName = "Unreachable"),
+	HotGetActorsOfClass		UMETA(DisplayName = "GetAllActorsOfClass In Tick"),
+	LatentNodeInLoop		UMETA(DisplayName = "Latent Node In Loop")
 };
 
 struct FSuggestionInfo

@@ -4,6 +4,7 @@
 #include "ToolMenus.h"
 #include "BPCheckCore.h"
 #include "BlueprintCompilationManager.h"
+#include "DetailCategoryBuilder.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "JsonObjectConverter.h"
 #include "ProfilingDebugging/ScopedTimers.h"
@@ -15,6 +16,11 @@
 #include "Widgets/Views/SExpanderArrow.h"
 #include "Widgets/Images/SImage.h"
 #include "Styling/StyleColors.h"
+#include "DetailLayoutBuilder.h"
+#include "DetailWidgetRow.h"
+#include "Suggestions.h"
+
+#include "Suggestions.generated.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -49,12 +55,31 @@ void FBPCheckEditorModule::StartupModule()
 	FBlueprintCompilationManager::RegisterCompilerExtension(UBlueprint::StaticClass(), Extension);
 
 	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(BPCheckTabId, FOnSpawnTab::CreateRaw(this, &FBPCheckEditorModule::CreateSuggestionsTab)).SetDisplayName(LOCTEXT("BPCheckSuggestionsList", "BPCheck Suggestions"));
+
+	FPropertyEditorModule& PE =
+		FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+	PE.RegisterCustomClassLayout(
+		UBPCheckSettings::StaticClass()->GetFName(),
+		FOnGetDetailCustomizationInstance::CreateStatic(
+			&FBPCheckSettingsCustomization::MakeInstance));
+	PE.NotifyCustomizationModuleChanged();
+
+	SettingsChangedHandle = GetMutableDefault<UBPCheckSettings>()->OnSettingsChanged.AddRaw(this, &FBPCheckEditorModule::OnSettingsChanged);
 }
 
 void FBPCheckEditorModule::ShutdownModule()
 {
 	UToolMenus::UnRegisterStartupCallback(this);
 	UToolMenus::UnregisterOwner(this);
+
+	if (FModuleManager::Get().IsModuleLoaded("PropertyEditor"))
+	{
+		FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor")
+			.UnregisterCustomClassLayout(UBPCheckSettings::StaticClass()->GetFName());
+	}
+
+	if (UObjectInitialized())
+		GetMutableDefault<UBPCheckSettings>()->OnSettingsChanged.Remove(SettingsChangedHandle);
 }
 
 void FBPCheckEditorModule::CreateMenuItem()
@@ -76,6 +101,16 @@ void FBPCheckEditorModule::CreateMenuItem()
 void FBPCheckEditorModule::OnButtonClicked()
 {
 	FGlobalTabmanager::Get()->TryInvokeTab(BPCheckTabId);
+}
+
+void FBPCheckEditorModule::OnSettingsChanged()
+{
+	if (TSharedPtr<SBPCheckSuggestionsPanel> P = SuggestionsPanel.Pin())
+	{
+		P->SetResults(BuildTree());
+	}
+
+	ApplyNodeMarkers();
 }
 
 void FBPCheckEditorModule::SetSuggestionsForBlueprint(const UBlueprint* Blueprint, TArray<FSuggestionContext>& NewSuggestions)
@@ -186,6 +221,7 @@ private:
 TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 {
 	TArray<TSharedPtr<FResultTreeItem>> Roots;
+	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
 
 	for (const auto& Pair : Suggestions)
 	{
@@ -193,12 +229,16 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 		if (!BP || Pair.Value.Num() == 0) continue;
 
 		TSharedPtr<FResultTreeItem> Group = MakeShared<FResultTreeItem>();
-		Group->Label = FString::Printf(TEXT("%s (%d)"), *BP->GetName(), Pair.Value.Num());
 		Group->bIsGroup = true;
 		Group->Severity = EItemSeverity::Group;
 
 		for (const FSuggestionContext& S : Pair.Value)
 		{
+			if (!Settings->IsSuggestionEnabled(S.Suggestion))
+			{
+				continue;
+			}
+
 			const FSuggestionInfo& Info = GetSuggestionInfo(S.Suggestion);
 
 			TSharedPtr<FResultTreeItem> Leaf = MakeShared<FResultTreeItem>();
@@ -212,9 +252,53 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 			Leaf->Severity = EItemSeverity::Warning;
 			Group->Children.Add(Leaf);
 		}
+
+		if (Group->Children.Num() == 0) continue;
+		Group->Label = FString::Printf(TEXT("%s (%d)"), *BP->GetName(), Group->Children.Num());
 		Roots.Add(Group);
 	}
 	return Roots;
+}
+
+void FBPCheckEditorModule::ApplyNodeMarkers()
+{
+	TSet<UEdGraph*> Dirtied;
+	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
+
+	for (const auto& Pair : Suggestions)
+	{
+		const UBlueprint* BP = Pair.Key;
+		if (!BP) continue;
+
+		for (const auto& Suggestion : Pair.Value)
+		{
+			UEdGraphNode* Node = BPCheck::Editor::ResolveNode(BP, Suggestion.NodeGuid);
+
+			if (Settings->IsSuggestionEnabled(Suggestion.Suggestion))
+			{
+				const FSuggestionInfo& Info = GetSuggestionInfo(Suggestion.Suggestion);
+				FStringFormatNamedArguments Args;
+				Args.Add(TEXT("Node"), FStringFormatArg(Node->GetNodeTitle(ENodeTitleType::ListView).ToString()));
+				const FString Desc = FString::Format(*Info.SuggestionDescription, Args);
+
+				Node->bHasCompilerMessage = true;
+				Node->ErrorType = static_cast<int32>(EMessageSeverity::Info);
+				Node->ErrorMsg = FString::Printf(TEXT("BPCheck: %s\n%s"), *Info.SuggestionCode, *Desc);
+				Dirtied.Add(Node->GetGraph());
+			}
+			else if (Node->ErrorMsg.StartsWith(TEXT("BPCheck:")))
+			{
+				Node->bHasCompilerMessage = false;
+				Node->ErrorMsg.Empty();
+				Dirtied.Add(Node->GetGraph());
+			}
+		}
+	}
+
+	for (UEdGraph* Graph : Dirtied)
+	{
+		Graph->NotifyGraphChanged();
+	}
 }
 
 void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
@@ -290,9 +374,15 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		Result = Analyzer.Analyze(CompilationContext, Data);
 	}
 
+	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
 
 	for (auto& Suggestion : Result.Suggestions)
 	{
+		if (!Settings->IsSuggestionEnabled(Suggestion.Suggestion))
+		{
+			continue;
+		}
+
 		UEdGraphNode* Node = BPCheck::Editor::ResolveNode(CompilationContext.Blueprint, Suggestion.NodeGuid);
 		if (!Node)
 		{
@@ -373,6 +463,35 @@ int32 UBPCheckCommandlet::Main(const FString& String)
 	UE_LOG(LogBPCheckEditor, Log, TEXT("%s"), *Json);
 
 	return 0;
+}
+
+void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
+{
+	TSharedRef<IPropertyHandle> MapHandle =
+		B.GetProperty(GET_MEMBER_NAME_CHECKED(UBPCheckSettings, SuggestionEnabled));
+	B.HideProperty(MapHandle);
+
+	IDetailCategoryBuilder& Cat = B.EditCategory("Suggestions");
+	const UEnum* Enum = StaticEnum<ESuggestion>();
+
+	for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+	{
+		const ESuggestion Suggestion = static_cast<ESuggestion>(Enum->GetValueByIndex(i));
+		Cat.AddCustomRow(Enum->GetDisplayNameTextByIndex(i))
+			.NameContent()[SNew(STextBlock)
+			.Text(Enum->GetDisplayNameTextByIndex(i))
+			.ToolTipText(FText::FromString(GetSuggestionInfo(Suggestion).SuggestionDescription))]
+			.ValueContent()[SNew(SCheckBox)
+			.IsChecked_Lambda([Suggestion] { return GetDefault<UBPCheckSettings>()->IsSuggestionEnabled(Suggestion)
+				? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+			.OnCheckStateChanged_Lambda([Suggestion](ECheckBoxState S)
+				{
+					UBPCheckSettings* Set = GetMutableDefault<UBPCheckSettings>();
+					Set->SuggestionEnabled.Add(Suggestion, S == ECheckBoxState::Checked);
+					Set->SaveConfig();
+					Set->OnSettingsChanged.Broadcast();
+				})];
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

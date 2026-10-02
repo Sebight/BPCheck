@@ -26,6 +26,25 @@ struct FSuggestionContext
 	FGuid NodeGuid;
 };
 
+UCLASS(config = BPCheck, DefaultConfig, meta = (DisplayName = "BPCheck"))
+class BPCHECKCORE_API UBPCheckSettings : public UDeveloperSettings
+{
+	GENERATED_BODY()
+
+public:
+	virtual FName GetContainerName() const override { return TEXT("Project"); }
+	virtual FName GetCategoryName()  const override { return TEXT("Plugins"); }
+	virtual FName GetSectionName()   const override { return TEXT("BPCheck"); }
+
+	UPROPERTY(Config, EditAnywhere, Category = "Suggestions")
+	TMap<ESuggestion, bool> SuggestionEnabled;
+
+	bool IsSuggestionEnabled(ESuggestion Suggestion) const;
+
+	DECLARE_MULTICAST_DELEGATE(FOnBPCheckSettingsChanged);
+	FOnBPCheckSettingsChanged OnSettingsChanged;
+};
+
 USTRUCT()
 struct FAnalyzerResult
 {

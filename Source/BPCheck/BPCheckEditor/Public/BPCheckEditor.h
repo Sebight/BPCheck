@@ -7,6 +7,7 @@
 #include "Commandlets/Commandlet.h"
 
 #include "BPCheckCore.h"
+#include "IDetailCustomization.h"
 
 #include "BPCheckEditor.generated.h"
 
@@ -28,15 +29,18 @@ public:
 
 	void CreateMenuItem();
 	void OnButtonClicked();
+	void OnSettingsChanged();
 
 	void SetSuggestionsForBlueprint(const UBlueprint* Blueprint, TArray<FSuggestionContext>& NewSuggestions);
 
 private:
 	TSharedRef<SDockTab> CreateSuggestionsTab(const FSpawnTabArgs&);
 	TArray<TSharedPtr<FResultTreeItem>> BuildTree() const;
+	void ApplyNodeMarkers();
 
 	TWeakPtr<SBPCheckSuggestionsPanel> SuggestionsPanel;
 	TMap<const UBlueprint*, TArray<FSuggestionContext>> Suggestions;
+	FDelegateHandle SettingsChangedHandle;
 };
 
 enum class EItemSeverity : uint8 { Info, Warning, Error, Group };
@@ -87,4 +91,15 @@ class BPCHECKEDITOR_API UBPCheckCommandlet : public UCommandlet
 	GENERATED_BODY()
 public:
 	virtual int32 Main(const FString&) override;
+};
+
+class FBPCheckSettingsCustomization : public IDetailCustomization
+{
+public:
+	static TSharedRef<IDetailCustomization> MakeInstance()
+	{
+		return MakeShared<FBPCheckSettingsCustomization>();
+	}
+
+	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
 };
