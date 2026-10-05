@@ -98,7 +98,7 @@ void FBPCheckEditorModule::CreateMenuItem()
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.ViewOptions")
 	));
 
-	FNewToolMenuDelegate Delegate = FNewToolMenuDelegate::CreateStatic(&FBPCheckEditorModule::BuildNodeSection);
+	FNewToolMenuDelegate Delegate = FNewToolMenuDelegate::CreateRaw(this, &FBPCheckEditorModule::BuildNodeSection);
 
 	for (TObjectIterator<UClass> It; It; ++It)
 	{
@@ -327,22 +327,46 @@ void FBPCheckEditorModule::BuildNodeSection(UToolMenu* InMenu)
 
 	const FGuid NodeGuid = Ctx->Node->NodeGuid;
 	// Suggestions
+	TArray<FSuggestionContext> SuggestionsForNode = GetSuggestionsForNode(NodeGuid);
 
 	FToolMenuSection& Section = InMenu->AddSection("BPCheckSection", INVTEXT("BPCheck"));
-	Section.AddSubMenu(
-		FName(*FString::Printf(TEXT("BPCheck_101"))),
-		FText::FromString("Cast to Node"),
-		FText::GetEmpty(),
-		FNewToolMenuDelegate::CreateLambda([BPPath = FSoftObjectPath(BP), NodeGuid](UToolMenu* Sub)
+
+	for (auto& Suggestion : SuggestionsForNode)
+	{
+		auto& Info = GetSuggestionInfo(Suggestion.Suggestion);
+
+		Section.AddSubMenu(
+			FName(*FString::Printf(TEXT("BPCheck_%s"), *Info.SuggestionCode)),
+			FText::FromString(StaticEnum<ESuggestion>()->GetDisplayNameTextByValue(static_cast<int64>(Suggestion.Suggestion)).ToString()),
+			FText::GetEmpty(),
+			FNewToolMenuDelegate::CreateLambda([BPPath = FSoftObjectPath(BP), NodeGuid](UToolMenu* Sub)
+				{
+					FToolMenuSection& S = Sub->AddSection("Actions");
+					S.AddMenuEntry("SilenceThis", INVTEXT("Silence this one"), INVTEXT("Suppress on this node only"),
+						FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+							{
+								UE_LOG(LogBPCheckEditor, Display, TEXT("Silence this"));
+							})));
+				})
+		);
+	}
+}
+
+TArray<FSuggestionContext> FBPCheckEditorModule::GetSuggestionsForNode(FGuid NodeGuid)
+{
+	TArray<FSuggestionContext> Out;
+	for (auto& Entry : Suggestions)
+	{
+		for (auto& Value : Entry.Value)
+		{
+			if (Value.NodeGuid == NodeGuid)
 			{
-				FToolMenuSection& S = Sub->AddSection("Actions");
-				S.AddMenuEntry("SilenceThis", INVTEXT("Silence this one"), INVTEXT("Suppress on this node only"),
-					FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
-						{
-							UE_LOG(LogBPCheckEditor, Display, TEXT("Silence this"));
-						})));
-			})
-	);
+				Out.Push(Value);
+			}
+		}
+	}
+
+	return Out;
 }
 
 void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
