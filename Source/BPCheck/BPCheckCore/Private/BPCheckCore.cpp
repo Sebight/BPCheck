@@ -35,6 +35,16 @@ void UBPCheckSettings::Suppress(const UBlueprint* Blueprint, FGuid NodeGuid, ESu
 	OnSettingsChanged.Broadcast();
 }
 
+void UBPCheckSettings::Unsuppress(const FSuppression& Suppression)
+{
+	Suppressions.Remove(Suppression);
+}
+
+void UBPCheckSettings::ClearSuppressions()
+{
+	Suppressions.Empty();
+}
+
 bool UBPCheckSettings::IsSuggestionEnabled(ESuggestion Suggestion) const
 {
 	const bool* Found = SuggestionEnabled.Find(Suggestion);

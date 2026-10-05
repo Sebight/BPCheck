@@ -64,6 +64,8 @@ public:
 
 	bool IsSuppressed(const UBlueprint* Blueprint, FGuid NodeGuid, ESuggestion Suggestion) const;
 	void Suppress(const UBlueprint* Blueprint, FGuid NodeGuid, ESuggestion Suggestion);
+	void Unsuppress(const FSuppression& Suppression);
+	void ClearSuppressions();
 
 	bool IsSuggestionEnabled(ESuggestion Suggestion) const;
 
