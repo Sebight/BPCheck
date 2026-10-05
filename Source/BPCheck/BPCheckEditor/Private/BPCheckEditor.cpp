@@ -342,7 +342,17 @@ void FBPCheckEditorModule::BuildNodeSection(UToolMenu* InMenu)
 			FNewToolMenuDelegate::CreateLambda([BPPath = FSoftObjectPath(BP), NodeGuid](UToolMenu* Sub)
 				{
 					FToolMenuSection& S = Sub->AddSection("Actions");
-					S.AddMenuEntry("SilenceThis", INVTEXT("Silence this one"), INVTEXT("Suppress on this node only"),
+					S.AddMenuEntry("SilenceThis", INVTEXT("Silence for this node"), INVTEXT("Silence suggestion for this node"),
+						FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+							{
+								UE_LOG(LogBPCheckEditor, Display, TEXT("Silence this"));
+							})));
+					S.AddMenuEntry("SilenceForBlueprint", INVTEXT("Silence for this Blueprint"), INVTEXT("Silence suggestion for this Blueprint"),
+						FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+							{
+								UE_LOG(LogBPCheckEditor, Display, TEXT("Silence this"));
+							})));
+					S.AddMenuEntry("SilenceForProject", INVTEXT("Silence globally"), INVTEXT("Silence suggestion for project"),
 						FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
 							{
 								UE_LOG(LogBPCheckEditor, Display, TEXT("Silence this"));
