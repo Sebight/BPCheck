@@ -250,7 +250,7 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 
 		for (const FSuggestionContext& S : Pair.Value)
 		{
-			if (!Settings->IsSuggestionEnabled(S.Suggestion) || Settings->IsSuppressed(BP, S.NodeGuid, S.Suggestion))
+			if (!Settings->IsSuggestionEnabled(S.Suggestion) || Settings->IsSuppressed(BP, { S.NodeGuid }, S.Suggestion))
 			{
 				continue;
 			}
@@ -290,7 +290,7 @@ void FBPCheckEditorModule::ApplyNodeMarkers()
 		{
 			UEdGraphNode* Node = BPCheck::Editor::ResolveNode(BP, Suggestion.NodeGuid);
 
-			if (Settings->IsSuggestionEnabled(Suggestion.Suggestion) && !Settings->IsSuppressed(BP, Suggestion.NodeGuid, Suggestion.Suggestion))
+			if (Settings->IsSuggestionEnabled(Suggestion.Suggestion) && !Settings->IsSuppressed(BP, { Suggestion.NodeGuid }, Suggestion.Suggestion))
 			{
 				const FSuggestionInfo& Info = GetSuggestionInfo(Suggestion.Suggestion);
 				FStringFormatNamedArguments Args;
@@ -349,18 +349,17 @@ void FBPCheckEditorModule::BuildNodeSection(UToolMenu* InMenu)
 					S.AddMenuEntry("SilenceThis", INVTEXT("Silence for this node"), INVTEXT("Silence suggestion for this node"),
 						FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
 							{
-								UE_LOG(LogBPCheckEditor, Display, TEXT("Silence this"));
-								Settings->Suppress(BP, NodeGuid, Suggestion.Suggestion);
+								Settings->Suppress(BP, { NodeGuid }, Suggestion.Suggestion);
 							})));
 					S.AddMenuEntry("SilenceForBlueprint", INVTEXT("Silence for this Blueprint"), INVTEXT("Silence suggestion for this Blueprint"),
 						FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
 							{
-								UE_LOG(LogBPCheckEditor, Display, TEXT("Silence this"));
+								Settings->Suppress(BP, {}, Suggestion.Suggestion);
 							})));
 					S.AddMenuEntry("SilenceForProject", INVTEXT("Silence globally"), INVTEXT("Silence suggestion for project"),
 						FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
 							{
-								UE_LOG(LogBPCheckEditor, Display, TEXT("Silence this"));
+								Settings->DisableSuggestion(Suggestion.Suggestion);
 							})));
 				})
 		);
@@ -461,7 +460,7 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 
 	for (auto& Suggestion : Result.Suggestions)
 	{
-		if (!Settings->IsSuggestionEnabled(Suggestion.Suggestion) || Settings->IsSuppressed(CompilationContext.Blueprint, Suggestion.NodeGuid, Suggestion.Suggestion))
+		if (!Settings->IsSuggestionEnabled(Suggestion.Suggestion) || Settings->IsSuppressed(CompilationContext.Blueprint, { Suggestion.NodeGuid }, Suggestion.Suggestion))
 		{
 			continue;
 		}
@@ -576,7 +575,7 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 				return FText::FromString(S.NodeGuid.GetValue().ToString().Left(8));
 			}
 
-			return FText::FromString(TEXT("<null>"));
+			return FText::FromString(TEXT("Blueprint-wide"));
 		};
 
 	for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)

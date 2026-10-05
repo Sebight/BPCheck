@@ -46,6 +46,7 @@ FORCEINLINE uint32 GetTypeHash(const FSuppression& S)
 	return HashCombine(HashCombine(GetTypeHash(S.Blueprint), GetTypeHash(S.NodeGuid)), GetTypeHash(S.Suggestion));
 }
 
+// TODO(Seb): Update an open project settings if a node is suppressed? Properly handle deleting of nodes, so that the list is not cluttered.
 UCLASS(config = BPCheck, defaultconfig, meta = (DisplayName = "BPCheck"))
 class BPCHECKCORE_API UBPCheckSettings : public UDeveloperSettings
 {
@@ -62,11 +63,13 @@ public:
 	UPROPERTY(Config)
 	TSet<FSuppression> Suppressions;
 
-	bool IsSuppressed(const UBlueprint* Blueprint, FGuid NodeGuid, ESuggestion Suggestion) const;
-	void Suppress(const UBlueprint* Blueprint, FGuid NodeGuid, ESuggestion Suggestion);
+	void Suppress(const UBlueprint* Blueprint, TOptional<FGuid> NodeGuid, ESuggestion Suggestion);
 	void Unsuppress(const FSuppression& Suppression);
+	void DisableSuggestion(ESuggestion Suggestion);
+
 	void ClearSuppressions();
 
+	bool IsSuppressed(const UBlueprint* Blueprint, TOptional<FGuid> NodeGuid, ESuggestion Suggestion) const;
 	bool IsSuggestionEnabled(ESuggestion Suggestion) const;
 
 	DECLARE_MULTICAST_DELEGATE(FOnBPCheckSettingsChanged);
