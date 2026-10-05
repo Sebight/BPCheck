@@ -248,7 +248,7 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 
 		for (const FSuggestionContext& S : Pair.Value)
 		{
-			if (!Settings->IsSuggestionEnabled(S.Suggestion))
+			if (!Settings->IsSuggestionEnabled(S.Suggestion) || Settings->IsSuppressed(BP, S.NodeGuid, S.Suggestion))
 			{
 				continue;
 			}
@@ -288,7 +288,7 @@ void FBPCheckEditorModule::ApplyNodeMarkers()
 		{
 			UEdGraphNode* Node = BPCheck::Editor::ResolveNode(BP, Suggestion.NodeGuid);
 
-			if (Settings->IsSuggestionEnabled(Suggestion.Suggestion))
+			if (Settings->IsSuggestionEnabled(Suggestion.Suggestion) && !Settings->IsSuppressed(BP, Suggestion.NodeGuid, Suggestion.Suggestion))
 			{
 				const FSuggestionInfo& Info = GetSuggestionInfo(Suggestion.Suggestion);
 				FStringFormatNamedArguments Args;
@@ -331,6 +331,8 @@ void FBPCheckEditorModule::BuildNodeSection(UToolMenu* InMenu)
 
 	FToolMenuSection& Section = InMenu->AddSection("BPCheckSection", INVTEXT("BPCheck"));
 
+	UBPCheckSettings* Settings = GetMutableDefault<UBPCheckSettings>();
+
 	for (auto& Suggestion : SuggestionsForNode)
 	{
 		auto& Info = GetSuggestionInfo(Suggestion.Suggestion);
@@ -339,13 +341,14 @@ void FBPCheckEditorModule::BuildNodeSection(UToolMenu* InMenu)
 			FName(*FString::Printf(TEXT("BPCheck_%s"), *Info.SuggestionCode)),
 			FText::FromString(StaticEnum<ESuggestion>()->GetDisplayNameTextByValue(static_cast<int64>(Suggestion.Suggestion)).ToString()),
 			FText::GetEmpty(),
-			FNewToolMenuDelegate::CreateLambda([BPPath = FSoftObjectPath(BP), NodeGuid](UToolMenu* Sub)
+			FNewToolMenuDelegate::CreateLambda([BPPath = FSoftObjectPath(BP), NodeGuid, BP, Suggestion, Settings](UToolMenu* Sub)
 				{
 					FToolMenuSection& S = Sub->AddSection("Actions");
 					S.AddMenuEntry("SilenceThis", INVTEXT("Silence for this node"), INVTEXT("Silence suggestion for this node"),
 						FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
 							{
 								UE_LOG(LogBPCheckEditor, Display, TEXT("Silence this"));
+								Settings->Suppress(BP, NodeGuid, Suggestion.Suggestion);
 							})));
 					S.AddMenuEntry("SilenceForBlueprint", INVTEXT("Silence for this Blueprint"), INVTEXT("Silence suggestion for this Blueprint"),
 						FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
@@ -456,7 +459,7 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 
 	for (auto& Suggestion : Result.Suggestions)
 	{
-		if (!Settings->IsSuggestionEnabled(Suggestion.Suggestion))
+		if (!Settings->IsSuggestionEnabled(Suggestion.Suggestion) || Settings->IsSuppressed(CompilationContext.Blueprint, Suggestion.NodeGuid, Suggestion.Suggestion))
 		{
 			continue;
 		}
