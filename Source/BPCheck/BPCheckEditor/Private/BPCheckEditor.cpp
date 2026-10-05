@@ -569,7 +569,7 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 				{
 					UBPCheckSettings* Set = GetMutableDefault<UBPCheckSettings>();
 					Set->SuggestionEnabled.Add(Suggestion, S == ECheckBoxState::Checked);
-					Set->SaveConfig();
+					Set->TryUpdateDefaultConfigFile();
 					Set->OnSettingsChanged.Broadcast();
 				})];
 	}

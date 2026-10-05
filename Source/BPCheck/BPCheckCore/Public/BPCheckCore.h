@@ -46,7 +46,7 @@ FORCEINLINE uint32 GetTypeHash(const FSuppression& S)
 	return HashCombine(HashCombine(GetTypeHash(S.Blueprint), GetTypeHash(S.NodeGuid)), GetTypeHash(S.Suggestion));
 }
 
-UCLASS(config = BPCheck, DefaultConfig, meta = (DisplayName = "BPCheck"))
+UCLASS(config = BPCheck, defaultconfig, meta = (DisplayName = "BPCheck"))
 class BPCHECKCORE_API UBPCheckSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()

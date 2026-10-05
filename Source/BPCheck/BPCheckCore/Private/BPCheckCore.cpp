@@ -31,7 +31,7 @@ bool UBPCheckSettings::IsSuppressed(const UBlueprint* Blueprint, FGuid NodeGuid,
 void UBPCheckSettings::Suppress(const UBlueprint* Blueprint, FGuid NodeGuid, ESuggestion Suggestion)
 {
 	Suppressions.Add({ FSoftObjectPath(Blueprint), NodeGuid, Suggestion });
-	SaveConfig();
+	TryUpdateDefaultConfigFile();
 	OnSettingsChanged.Broadcast();
 }
 
