@@ -563,12 +563,20 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 		{
 			if (const UBlueprint* BP = Cast<UBlueprint>(S.Blueprint.ResolveObject()))
 			{
-				if (const UEdGraphNode* N = BPCheck::Editor::ResolveNode(BP, S.NodeGuid))
+				if (S.NodeGuid.IsSet())
 				{
-					return N->GetNodeTitle(ENodeTitleType::ListView);
+					if (const UEdGraphNode* N = BPCheck::Editor::ResolveNode(BP, S.NodeGuid.GetValue()))
+					{
+						return N->GetNodeTitle(ENodeTitleType::ListView);
+					}
 				}
 			}
-			return FText::FromString(S.NodeGuid.ToString().Left(8));
+			if (S.NodeGuid.IsSet())
+			{
+				return FText::FromString(S.NodeGuid.GetValue().ToString().Left(8));
+			}
+
+			return FText::FromString(TEXT("<null>"));
 		};
 
 	for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)

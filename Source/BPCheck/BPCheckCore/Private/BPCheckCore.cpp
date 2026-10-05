@@ -30,7 +30,7 @@ bool UBPCheckSettings::IsSuppressed(const UBlueprint* Blueprint, FGuid NodeGuid,
 
 void UBPCheckSettings::Suppress(const UBlueprint* Blueprint, FGuid NodeGuid, ESuggestion Suggestion)
 {
-	Suppressions.Add({ FSoftObjectPath(Blueprint), NodeGuid, Suggestion });
+	Suppressions.Add({ FSoftObjectPath(Blueprint), {NodeGuid}, Suggestion });
 	TryUpdateDefaultConfigFile();
 	OnSettingsChanged.Broadcast();
 }
@@ -38,11 +38,15 @@ void UBPCheckSettings::Suppress(const UBlueprint* Blueprint, FGuid NodeGuid, ESu
 void UBPCheckSettings::Unsuppress(const FSuppression& Suppression)
 {
 	Suppressions.Remove(Suppression);
+	TryUpdateDefaultConfigFile();
+	OnSettingsChanged.Broadcast();
 }
 
 void UBPCheckSettings::ClearSuppressions()
 {
 	Suppressions.Empty();
+	TryUpdateDefaultConfigFile();
+	OnSettingsChanged.Broadcast();
 }
 
 bool UBPCheckSettings::IsSuggestionEnabled(ESuggestion Suggestion) const

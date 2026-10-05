@@ -32,12 +32,12 @@ struct FSuppression
 	GENERATED_BODY()
 
 	UPROPERTY() FSoftObjectPath Blueprint;
-	UPROPERTY() FGuid NodeGuid;
+	UPROPERTY() TOptional<FGuid> NodeGuid;
 	UPROPERTY() ESuggestion Suggestion = ESuggestion::None;
 
 	bool operator==(const FSuppression& Other) const
 	{
-		return Suggestion == Other.Suggestion && NodeGuid == Other.NodeGuid && Blueprint == Other.Blueprint;
+		return Suggestion == Other.Suggestion && Blueprint == Other.Blueprint && ((NodeGuid.IsSet() && Other.NodeGuid.IsSet()) ? NodeGuid.GetValue() == Other.NodeGuid.GetValue() : true);
 	}
 };
 
