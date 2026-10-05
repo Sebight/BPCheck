@@ -32,11 +32,11 @@ public:
 	void OnSettingsChanged();
 
 	void SetSuggestionsForBlueprint(const UBlueprint* Blueprint, TArray<FSuggestionContext>& NewSuggestions);
+	void ApplyNodeMarkers();
 
 private:
 	TSharedRef<SDockTab> CreateSuggestionsTab(const FSpawnTabArgs&);
 	TArray<TSharedPtr<FResultTreeItem>> BuildTree() const;
-	void ApplyNodeMarkers();
 	void BuildNodeSection(UToolMenu* InMenu);
 
 	TArray<FSuggestionContext> GetSuggestionsForNode(FGuid NodeGuid);

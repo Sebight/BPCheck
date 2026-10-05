@@ -19,6 +19,8 @@
 #include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
 #include "Suggestions.h"
+#include "PropertyCustomizationHelpers.h"
+#include "IDetailGroup.h"
 
 #include "Suggestions.generated.h"
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -555,6 +557,20 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 	IDetailCategoryBuilder& Cat = B.EditCategory("Suggestions");
 	const UEnum* Enum = StaticEnum<ESuggestion>();
 
+	FBPCheckEditorModule& EditorModule = FModuleManager::Get().GetModuleChecked<FBPCheckEditorModule>("BPCheckEditor");
+
+	auto GetNodeLabel = [](const FSuppression& S) -> FText
+		{
+			if (const UBlueprint* BP = Cast<UBlueprint>(S.Blueprint.ResolveObject()))
+			{
+				if (const UEdGraphNode* N = BPCheck::Editor::ResolveNode(BP, S.NodeGuid))
+				{
+					return N->GetNodeTitle(ENodeTitleType::ListView);
+				}
+			}
+			return FText::FromString(S.NodeGuid.ToString().Left(8));
+		};
+
 	for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
 	{
 		const ESuggestion Suggestion = static_cast<ESuggestion>(Enum->GetValueByIndex(i));
@@ -572,6 +588,88 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 					Set->TryUpdateDefaultConfigFile();
 					Set->OnSettingsChanged.Broadcast();
 				})];
+	}
+
+	TWeakPtr<IDetailsView> View = B.GetDetailsViewSharedPtr();
+	auto Refresh = [View, &EditorModule]()
+		{
+			if (TSharedPtr<IDetailsView> V = View.Pin()) {
+				V->ForceRefresh();
+				EditorModule.ApplyNodeMarkers();
+			}
+		};
+
+	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
+	IDetailCategoryBuilder& SupCat = B.EditCategory("Suppressions");
+
+	SupCat.HeaderContent(
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().FillWidth(1.f)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+		[
+			SNew(SButton)
+				.Text(INVTEXT("Clear all"))
+				.IsEnabled_Lambda([] { return GetDefault<UBPCheckSettings>()->Suppressions.Num() > 0; })
+				.OnClicked_Lambda([Refresh]()
+					{
+						GetMutableDefault<UBPCheckSettings>()->ClearSuppressions();
+						Refresh();
+						return FReply::Handled();
+					})
+		]);
+
+	if (Settings->Suppressions.IsEmpty())
+	{
+		SupCat.AddCustomRow(INVTEXT("none"))
+			.WholeRowContent()[SNew(STextBlock).Text(INVTEXT("No suppressions"))
+			.ColorAndOpacity(FSlateColor::UseSubduedForeground())];
+		return;
+	}
+
+	TMap<FSoftObjectPath, TArray<FSuppression>> ByBlueprint;
+	for (const FSuppression& S : Settings->Suppressions)
+	{
+		ByBlueprint.FindOrAdd(S.Blueprint).Add(S);
+	}
+	ByBlueprint.KeySort([](const FSoftObjectPath& L, const FSoftObjectPath& R)
+		{
+			return L.ToString() < R.ToString();
+		});
+
+	for (const auto& Pair : ByBlueprint)
+	{
+		IDetailGroup& Group = SupCat.AddGroup(
+			FName(*Pair.Key.ToString()),
+			FText::FromString(FString::Printf(TEXT("%s (%d)"), *Pair.Key.GetAssetName(), Pair.Value.Num())),
+			false, true);
+
+		for (const FSuppression& S : Pair.Value)
+		{
+			Group.AddWidgetRow()
+				.FilterString(FText::FromString(GetSuggestionInfo(S.Suggestion).SuggestionCode))
+				.NameContent()
+				[
+					SNew(STextBlock).Text(FText::FromString(GetSuggestionInfo(S.Suggestion).SuggestionCode))
+				]
+				.ValueContent().HAlign(HAlign_Fill)
+				[
+					SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+						[
+							SNew(STextBlock).Text(GetNodeLabel(S))
+						]
+						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+						[
+							PropertyCustomizationHelpers::MakeDeleteButton(
+								FSimpleDelegate::CreateLambda([S, Refresh]()
+									{
+										GetMutableDefault<UBPCheckSettings>()->Unsuppress(S);
+										Refresh();
+									}),
+								INVTEXT("Remove suppression"))
+						]
+				];
+		}
 	}
 }
 
