@@ -37,6 +37,7 @@ private:
 	TSharedRef<SDockTab> CreateSuggestionsTab(const FSpawnTabArgs&);
 	TArray<TSharedPtr<FResultTreeItem>> BuildTree() const;
 	void ApplyNodeMarkers();
+	static void BuildNodeSection(UToolMenu* InMenu);
 
 	TWeakPtr<SBPCheckSuggestionsPanel> SuggestionsPanel;
 	TMap<const UBlueprint*, TArray<FSuggestionContext>> Suggestions;

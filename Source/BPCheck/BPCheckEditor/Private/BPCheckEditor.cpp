@@ -21,6 +21,7 @@
 #include "Suggestions.h"
 
 #include "Suggestions.generated.h"
+#include "Kismet2/BlueprintEditorUtils.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -96,6 +97,19 @@ void FBPCheckEditorModule::CreateMenuItem()
 		LOCTEXT("BPCheckTooltip", "See BPCheck Suggestions"),
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.ViewOptions")
 	));
+
+	FNewToolMenuDelegate Delegate = FNewToolMenuDelegate::CreateStatic(&FBPCheckEditorModule::BuildNodeSection);
+
+	for (TObjectIterator<UClass> It; It; ++It)
+	{
+		if (!It->IsChildOf(UK2Node::StaticClass()) || It->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated))
+		{
+			continue;
+		}
+
+		const FName MenuName = *FString::Printf(TEXT("GraphEditor.GraphNodeContextMenu.%s"), *It->GetName());
+		UToolMenus::Get()->ExtendMenu(MenuName)->AddDynamicSection("BPCheck", Delegate);
+	}
 }
 
 void FBPCheckEditorModule::OnButtonClicked()
@@ -299,6 +313,36 @@ void FBPCheckEditorModule::ApplyNodeMarkers()
 	{
 		Graph->NotifyGraphChanged();
 	}
+}
+
+void FBPCheckEditorModule::BuildNodeSection(UToolMenu* InMenu)
+{
+	if (InMenu->FindSection("BPCheckSection")) return;
+
+	const UGraphNodeContextMenuContext* Ctx = InMenu->FindContext<UGraphNodeContextMenuContext>();
+	if (!Ctx || !Ctx->Node) return;
+
+	const UBlueprint* BP = FBlueprintEditorUtils::FindBlueprintForNode(Ctx->Node);
+	if (!BP) return;
+
+	const FGuid NodeGuid = Ctx->Node->NodeGuid;
+	// Suggestions
+
+	FToolMenuSection& Section = InMenu->AddSection("BPCheckSection", INVTEXT("BPCheck"));
+	Section.AddSubMenu(
+		FName(*FString::Printf(TEXT("BPCheck_101"))),
+		FText::FromString("Cast to Node"),
+		FText::GetEmpty(),
+		FNewToolMenuDelegate::CreateLambda([BPPath = FSoftObjectPath(BP), NodeGuid](UToolMenu* Sub)
+			{
+				FToolMenuSection& S = Sub->AddSection("Actions");
+				S.AddMenuEntry("SilenceThis", INVTEXT("Silence this one"), INVTEXT("Suppress on this node only"),
+					FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+						{
+							UE_LOG(LogBPCheckEditor, Display, TEXT("Silence this"));
+						})));
+			})
+	);
 }
 
 void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
