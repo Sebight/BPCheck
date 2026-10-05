@@ -7,6 +7,7 @@ using FSuggestionCode = FString;
 UENUM()
 enum class ESuggestion : uint8
 {
+	None					UMETA(DisplayName = "None"),
 	PrintInHotPath			UMETA(DisplayName = "Print In Hot Path"),
 	HardCastToBPClass		UMETA(DisplayName = "Hard Cast To BP Class"),
 	CastWithoutFailHandler	UMETA(DisplayName = "Cast Without Fail Handler"),

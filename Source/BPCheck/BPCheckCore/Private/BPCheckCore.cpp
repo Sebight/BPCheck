@@ -23,6 +23,18 @@ void FBPCheckCoreModule::ShutdownModule()
 
 }
 
+bool UBPCheckSettings::IsSuppressed(const UBlueprint* Blueprint, FGuid NodeGuid, ESuggestion Suggestion) const
+{
+	return Suppressions.Contains(FSuppression{ FSoftObjectPath(Blueprint), NodeGuid, Suggestion });
+}
+
+void UBPCheckSettings::Suppress(const UBlueprint* Blueprint, FGuid NodeGuid, ESuggestion Suggestion)
+{
+	Suppressions.Add({ FSoftObjectPath(Blueprint), NodeGuid, Suggestion });
+	SaveConfig();
+	OnSettingsChanged.Broadcast();
+}
+
 bool UBPCheckSettings::IsSuggestionEnabled(ESuggestion Suggestion) const
 {
 	const bool* Found = SuggestionEnabled.Find(Suggestion);

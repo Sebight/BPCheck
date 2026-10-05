@@ -26,6 +26,26 @@ struct FSuggestionContext
 	FGuid NodeGuid;
 };
 
+USTRUCT()
+struct FSuppression
+{
+	GENERATED_BODY()
+
+	UPROPERTY() FSoftObjectPath Blueprint;
+	UPROPERTY() FGuid NodeGuid;
+	UPROPERTY() ESuggestion Suggestion = ESuggestion::None;
+
+	bool operator==(const FSuppression& Other) const
+	{
+		return Suggestion == Other.Suggestion && NodeGuid == Other.NodeGuid && Blueprint == Other.Blueprint;
+	}
+};
+
+FORCEINLINE uint32 GetTypeHash(const FSuppression& S)
+{
+	return HashCombine(HashCombine(GetTypeHash(S.Blueprint), GetTypeHash(S.NodeGuid)), GetTypeHash(S.Suggestion));
+}
+
 UCLASS(config = BPCheck, DefaultConfig, meta = (DisplayName = "BPCheck"))
 class BPCHECKCORE_API UBPCheckSettings : public UDeveloperSettings
 {
@@ -38,6 +58,12 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category = "Suggestions")
 	TMap<ESuggestion, bool> SuggestionEnabled;
+
+	UPROPERTY(Config)
+	TSet<FSuppression> Suppressions;
+
+	bool IsSuppressed(const UBlueprint* Blueprint, FGuid NodeGuid, ESuggestion Suggestion) const;
+	void Suppress(const UBlueprint* Blueprint, FGuid NodeGuid, ESuggestion Suggestion);
 
 	bool IsSuggestionEnabled(ESuggestion Suggestion) const;
 
