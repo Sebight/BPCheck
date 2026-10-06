@@ -32,11 +32,14 @@ public:
 	void OnSettingsChanged();
 
 	void SetSuggestionsForBlueprint(const UBlueprint* Blueprint, TArray<FSuggestionContext>& NewSuggestions);
+	void ApplyNodeMarkers();
 
 private:
 	TSharedRef<SDockTab> CreateSuggestionsTab(const FSpawnTabArgs&);
 	TArray<TSharedPtr<FResultTreeItem>> BuildTree() const;
-	void ApplyNodeMarkers();
+	void BuildNodeSection(UToolMenu* InMenu);
+
+	TArray<FSuggestionContext> GetSuggestionsForNode(FGuid NodeGuid);
 
 	TWeakPtr<SBPCheckSuggestionsPanel> SuggestionsPanel;
 	TMap<const UBlueprint*, TArray<FSuggestionContext>> Suggestions;
@@ -96,10 +99,15 @@ public:
 class FBPCheckSettingsCustomization : public IDetailCustomization
 {
 public:
+	virtual ~FBPCheckSettingsCustomization();
 	static TSharedRef<IDetailCustomization> MakeInstance()
 	{
 		return MakeShared<FBPCheckSettingsCustomization>();
 	}
 
 	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
+
+private:
+	TWeakPtr<IDetailsView> View;
+	FDelegateHandle SettingsHandle;
 };

@@ -46,7 +46,8 @@ public class BPCheckEditor : ModuleRules
 				"Json",
 				"JsonUtilities",
                 "InputCore",
-				"PropertyEditor"
+				"PropertyEditor",
+                "BlueprintGraph"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

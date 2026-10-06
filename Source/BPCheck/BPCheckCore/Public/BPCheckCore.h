@@ -26,7 +26,27 @@ struct FSuggestionContext
 	FGuid NodeGuid;
 };
 
-UCLASS(config = BPCheck, DefaultConfig, meta = (DisplayName = "BPCheck"))
+USTRUCT()
+struct FSuppression
+{
+	GENERATED_BODY()
+
+	UPROPERTY() FSoftObjectPath Blueprint;
+	UPROPERTY() TOptional<FGuid> NodeGuid;
+	UPROPERTY() ESuggestion Suggestion = ESuggestion::None;
+
+	bool operator==(const FSuppression& Other) const
+	{
+		return Suggestion == Other.Suggestion && Blueprint == Other.Blueprint && ((NodeGuid.IsSet() && Other.NodeGuid.IsSet()) ? NodeGuid.GetValue() == Other.NodeGuid.GetValue() : true);
+	}
+};
+
+FORCEINLINE uint32 GetTypeHash(const FSuppression& S)
+{
+	return HashCombine(HashCombine(GetTypeHash(S.Blueprint), GetTypeHash(S.NodeGuid)), GetTypeHash(S.Suggestion));
+}
+
+UCLASS(config = BPCheck, defaultconfig, meta = (DisplayName = "BPCheck"))
 class BPCHECKCORE_API UBPCheckSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
@@ -35,11 +55,24 @@ public:
 	virtual FName GetContainerName() const override { return TEXT("Project"); }
 	virtual FName GetCategoryName()  const override { return TEXT("Plugins"); }
 	virtual FName GetSectionName()   const override { return TEXT("BPCheck"); }
+	void PruneDeadNodes(UBlueprint* Blueprint, const TArray<FGuid>& AliveNodes);
 
 	UPROPERTY(Config, EditAnywhere, Category = "Suggestions")
 	TMap<ESuggestion, bool> SuggestionEnabled;
 
+	UPROPERTY(Config)
+	TSet<FSuppression> Suppressions;
+
+	void Suppress(const UBlueprint* Blueprint, TOptional<FGuid> NodeGuid, ESuggestion Suggestion);
+	void Unsuppress(const FSuppression& Suppression);
+	void DisableSuggestion(ESuggestion Suggestion);
+
+	void ClearSuppressions();
+	void ClearAll();
+
+	bool IsSuppressed(const UBlueprint* Blueprint, TOptional<FGuid> NodeGuid, ESuggestion Suggestion) const;
 	bool IsSuggestionEnabled(ESuggestion Suggestion) const;
+	void SetSuggestionEnabled(ESuggestion S, bool bEnabled);
 
 	DECLARE_MULTICAST_DELEGATE(FOnBPCheckSettingsChanged);
 	FOnBPCheckSettingsChanged OnSettingsChanged;

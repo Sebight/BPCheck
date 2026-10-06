@@ -23,10 +23,75 @@ void FBPCheckCoreModule::ShutdownModule()
 
 }
 
+bool UBPCheckSettings::IsSuppressed(const UBlueprint* Blueprint, TOptional<FGuid> NodeGuid, ESuggestion Suggestion) const
+{
+	return Suppressions.Contains(FSuppression{ FSoftObjectPath(Blueprint), NodeGuid, Suggestion });
+}
+
+void UBPCheckSettings::PruneDeadNodes(UBlueprint* Blueprint, const TArray<FGuid>& AliveNodes)
+{
+	for (auto It = Suppressions.CreateIterator(); It; ++It)
+	{
+		if (It->Blueprint == FSoftObjectPath(Blueprint))
+		{
+			if (It->NodeGuid.IsSet() && !AliveNodes.Contains(It->NodeGuid))
+			{
+				It.RemoveCurrent();
+			}
+		}
+	}
+}
+
+void UBPCheckSettings::Suppress(const UBlueprint* Blueprint, TOptional<FGuid> NodeGuid, ESuggestion Suggestion)
+{
+	Suppressions.Add({ FSoftObjectPath(Blueprint), NodeGuid, Suggestion });
+	TryUpdateDefaultConfigFile();
+	OnSettingsChanged.Broadcast();
+}
+
+void UBPCheckSettings::Unsuppress(const FSuppression& Suppression)
+{
+	Suppressions.Remove(Suppression);
+	TryUpdateDefaultConfigFile();
+	OnSettingsChanged.Broadcast();
+}
+
+void UBPCheckSettings::DisableSuggestion(ESuggestion Suggestion)
+{
+	SuggestionEnabled.Add(Suggestion, false);
+	TryUpdateDefaultConfigFile();
+	OnSettingsChanged.Broadcast();
+}
+
+void UBPCheckSettings::ClearSuppressions()
+{
+	Suppressions.Empty();
+	TryUpdateDefaultConfigFile();
+	OnSettingsChanged.Broadcast();
+}
+
+void UBPCheckSettings::ClearAll()
+{
+	Suppressions.Empty();
+	for (TPair<ESuggestion, bool>& P : SuggestionEnabled)
+	{
+		P.Value = true;
+	}
+	TryUpdateDefaultConfigFile();
+	OnSettingsChanged.Broadcast();
+}
+
 bool UBPCheckSettings::IsSuggestionEnabled(ESuggestion Suggestion) const
 {
 	const bool* Found = SuggestionEnabled.Find(Suggestion);
 	return Found ? *Found : true;
+}
+
+void UBPCheckSettings::SetSuggestionEnabled(ESuggestion S, bool bEnabled)
+{
+	SuggestionEnabled.Add(S, bEnabled);
+	TryUpdateDefaultConfigFile();
+	OnSettingsChanged.Broadcast();
 }
 
 void FAnalysisContext::AddFlags(FGuid NodeGuid, TSet<ENodeFlag> Flags)
