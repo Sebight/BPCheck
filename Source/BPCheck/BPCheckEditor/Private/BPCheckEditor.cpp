@@ -620,12 +620,13 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 	auto AddRuleRow = [&](IDetailGroup& Group, const FSuppression& S, const FText& Scope, bool bSubdued)
 		{
 			const FString Code = GetSuggestionInfo(S.Suggestion).SuggestionCode;
+			FString Name = FString::Printf(TEXT("%s (%s)"), *StaticEnum<ESuggestion>()->GetDisplayNameTextByValue(static_cast<int64>(S.Suggestion)).ToString(), *Code);
 
 			Group.AddWidgetRow()
 				.FilterString(FText::FromString(Code))
 				.NameContent()
 				[
-					SNew(STextBlock).Text(FText::FromString(Code))
+					SNew(STextBlock).Text(FText::FromString(Name))
 				]
 				.ValueContent().HAlign(HAlign_Fill)
 				[
