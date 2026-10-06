@@ -69,9 +69,11 @@ public:
 	void DisableSuggestion(ESuggestion Suggestion);
 
 	void ClearSuppressions();
+	void ClearAll();
 
 	bool IsSuppressed(const UBlueprint* Blueprint, TOptional<FGuid> NodeGuid, ESuggestion Suggestion) const;
 	bool IsSuggestionEnabled(ESuggestion Suggestion) const;
+	void SetSuggestionEnabled(ESuggestion S, bool bEnabled);
 
 	DECLARE_MULTICAST_DELEGATE(FOnBPCheckSettingsChanged);
 	FOnBPCheckSettingsChanged OnSettingsChanged;

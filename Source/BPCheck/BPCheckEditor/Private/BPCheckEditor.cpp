@@ -21,6 +21,8 @@
 #include "Suggestions.h"
 #include "PropertyCustomizationHelpers.h"
 #include "IDetailGroup.h"
+#include "Framework/MultiBox/MultiBoxBuilder.h"
+#include "Widgets/Input/SComboButton.h"
 
 #include "Suggestions.generated.h"
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -592,41 +594,37 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 		B.GetProperty(GET_MEMBER_NAME_CHECKED(UBPCheckSettings, SuggestionEnabled));
 	B.HideProperty(MapHandle);
 
-	IDetailCategoryBuilder& Cat = B.EditCategory("Suggestions");
 	const UEnum* Enum = StaticEnum<ESuggestion>();
 
-	FBPCheckEditorModule& EditorModule = FModuleManager::Get().GetModuleChecked<FBPCheckEditorModule>("BPCheckEditor");
-
+	// Node rows only. Blueprint-wide entries never reach this.
 	auto GetNodeLabel = [](const FSuppression& S) -> FText
 		{
 			if (const UBlueprint* BP = Cast<UBlueprint>(S.Blueprint.ResolveObject()))
 			{
-				if (S.NodeGuid.IsSet())
+				if (const UEdGraphNode* N = BPCheck::Editor::ResolveNode(BP, S.NodeGuid.GetValue()))
 				{
-					if (const UEdGraphNode* N = BPCheck::Editor::ResolveNode(BP, S.NodeGuid.GetValue()))
-					{
-						return N->GetNodeTitle(ENodeTitleType::ListView);
-					}
+					return N->GetNodeTitle(ENodeTitleType::ListView);
 				}
 			}
-			if (S.NodeGuid.IsSet())
-			{
-				return FText::FromString(S.NodeGuid.GetValue().ToString().Left(8));
-			}
-
-			return FText::FromString(TEXT("Blueprint-wide"));
+			return FText::FromString(S.NodeGuid.GetValue().ToString().Left(8));
 		};
 
-	auto AddRuleRow = [&](IDetailGroup& Group, const FSuppression& S, const FText& Scope, bool bSubdued)
+	auto GetRuleName = [](ESuggestion Suggestion) -> FString
 		{
-			const FString Code = GetSuggestionInfo(S.Suggestion).SuggestionCode;
-			FString Name = FString::Printf(TEXT("%s (%s)"), *StaticEnum<ESuggestion>()->GetDisplayNameTextByValue(static_cast<int64>(S.Suggestion)).ToString(), *Code);
+			return FString::Printf(TEXT("%s (%s)"),
+				*StaticEnum<ESuggestion>()->GetDisplayNameTextByValue(static_cast<int64>(Suggestion)).ToString(),
+				*GetSuggestionInfo(Suggestion).SuggestionCode);
+		};
+
+	auto AddRuleRow = [GetRuleName](IDetailGroup& Group, ESuggestion Suggestion, const FText& Scope, bool bSubdued, FSimpleDelegate OnRemove, const FText& RemoveTip)
+		{
+			const FText Name = FText::FromString(GetRuleName(Suggestion));
 
 			Group.AddWidgetRow()
-				.FilterString(FText::FromString(Code))
+				.FilterString(Name)
 				.NameContent()
 				[
-					SNew(STextBlock).Text(FText::FromString(Name))
+					SNew(STextBlock).Text(Name)
 				]
 				.ValueContent().HAlign(HAlign_Fill)
 				[
@@ -639,54 +637,71 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 						]
 						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 						[
-							PropertyCustomizationHelpers::MakeDeleteButton(
-								FSimpleDelegate::CreateLambda([S]()
-									{
-										GetMutableDefault<UBPCheckSettings>()->Unsuppress(S);
-									}),
-								INVTEXT("Remove suppression"))
+							PropertyCustomizationHelpers::MakeDeleteButton(OnRemove, RemoveTip)
 						]
 				];
 		};
 
-	for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
-	{
-		const ESuggestion Suggestion = static_cast<ESuggestion>(Enum->GetValueByIndex(i));
-		Cat.AddCustomRow(Enum->GetDisplayNameTextByIndex(i))
-			.NameContent()[SNew(STextBlock)
-			.Text(Enum->GetDisplayNameTextByIndex(i))
-			.ToolTipText(FText::FromString(GetSuggestionInfo(Suggestion).SuggestionDescription))]
-			.ValueContent()[SNew(SCheckBox)
-			.IsChecked_Lambda([Suggestion] { return GetDefault<UBPCheckSettings>()->IsSuggestionEnabled(Suggestion)
-				? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-			.OnCheckStateChanged_Lambda([Suggestion](ECheckBoxState S)
+	auto RemoveSuppression = [](const FSuppression& S)
+		{
+			return FSimpleDelegate::CreateLambda([S]()
 				{
-					UBPCheckSettings* Set = GetMutableDefault<UBPCheckSettings>();
-					Set->SuggestionEnabled.Add(Suggestion, S == ECheckBoxState::Checked);
-					Set->TryUpdateDefaultConfigFile();
-					Set->OnSettingsChanged.Broadcast();
-				})];
-	}
+					GetMutableDefault<UBPCheckSettings>()->Unsuppress(S);
+				});
+		};
 
 	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
 	IDetailCategoryBuilder& SupCat = B.EditCategory("Suppressions");
 
+	TArray<ESuggestion> Muted;
+	TArray<ESuggestion> Active;
+	for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
+	{
+		const ESuggestion S = static_cast<ESuggestion>(Enum->GetValueByIndex(i));
+		(Settings->IsSuggestionEnabled(S) ? Active : Muted).Add(S);
+	}
+
+	const bool bAnything = !Muted.IsEmpty() || !Settings->Suppressions.IsEmpty();
+
 	SupCat.HeaderContent(
 		SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().FillWidth(1.f)
-		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 4, 0)
+		[
+			SNew(SComboButton)
+				.HasDownArrow(true)
+				.IsEnabled(!Active.IsEmpty())
+				.ButtonContent()[SNew(STextBlock).Text(INVTEXT("Mute rule"))]
+				.OnGetMenuContent_Lambda([Active, GetRuleName]() -> TSharedRef<SWidget>
+					{
+						FMenuBuilder Menu(true, nullptr);
+						for (ESuggestion S : Active)
+						{
+							Menu.AddMenuEntry(
+								FText::FromString(GetRuleName(S)),
+								FText::FromString(GetSuggestionInfo(S).SuggestionDescription),
+								FSlateIcon(),
+								FUIAction(FExecuteAction::CreateLambda([S]()
+									{
+										GetMutableDefault<UBPCheckSettings>()->SetSuggestionEnabled(S, false);
+									})));
+						}
+						return Menu.MakeWidget();
+					})
+		]
+	+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 		[
 			SNew(SButton)
 				.Text(INVTEXT("Clear all"))
-				.IsEnabled_Lambda([] { return GetDefault<UBPCheckSettings>()->Suppressions.Num() > 0; })
+				.IsEnabled(bAnything)
 				.OnClicked_Lambda([]()
 					{
-						GetMutableDefault<UBPCheckSettings>()->ClearSuppressions();
+						GetMutableDefault<UBPCheckSettings>()->ClearAll();
 						return FReply::Handled();
 					})
 		]);
 
-	if (Settings->Suppressions.IsEmpty())
+	if (!bAnything)
 	{
 		SupCat.AddCustomRow(INVTEXT("none"))
 			.WholeRowContent()[SNew(STextBlock).Text(INVTEXT("No suppressions"))
@@ -706,13 +721,24 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 			return L.LexicalLess(R);
 		});
 
-	if (!ProjectWide.IsEmpty())
+	const int32 ProjectWideCount = Muted.Num() + ProjectWide.Num();
+	if (ProjectWideCount > 0)
 	{
 		IDetailGroup& G = SupCat.AddGroup("ProjectWide",
-			FText::FromString(FString::Printf(TEXT("Project-wide (%d)"), ProjectWide.Num())), false, true);
+			FText::FromString(FString::Printf(TEXT("Project-wide (%d)"), ProjectWideCount)), false, true);
+
+		for (ESuggestion S : Muted)
+		{
+			AddRuleRow(G, S, INVTEXT("Rule disabled"), true,
+				FSimpleDelegate::CreateLambda([S]()
+					{
+						GetMutableDefault<UBPCheckSettings>()->SetSuggestionEnabled(S, true);
+					}),
+				INVTEXT("Re-enable rule"));
+		}
 		for (const FSuppression& S : ProjectWide)
 		{
-			AddRuleRow(G, S, INVTEXT("All Blueprints"), true);
+			AddRuleRow(G, S.Suggestion, INVTEXT("All Blueprints"), true, RemoveSuppression(S), INVTEXT("Remove suppression"));
 		}
 	}
 
@@ -731,7 +757,7 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 
 		for (const FSuppression* S : BlueprintWide)
 		{
-			AddRuleRow(Group, *S, INVTEXT("Entire Blueprint"), true);
+			AddRuleRow(Group, S->Suggestion, INVTEXT("Entire Blueprint"), true, RemoveSuppression(*S), INVTEXT("Remove suppression"));
 		}
 
 		if (!Nodes.IsEmpty())
@@ -740,7 +766,7 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 				FText::FromString(FString::Printf(TEXT("Nodes (%d)"), Nodes.Num())), true);
 			for (const FSuppression* S : Nodes)
 			{
-				AddRuleRow(NodeGroup, *S, GetNodeLabel(*S), false);
+				AddRuleRow(NodeGroup, S->Suggestion, GetNodeLabel(*S), false, RemoveSuppression(*S), INVTEXT("Remove suppression"));
 			}
 		}
 	}

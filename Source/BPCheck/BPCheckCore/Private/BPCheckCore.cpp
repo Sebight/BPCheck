@@ -70,10 +70,28 @@ void UBPCheckSettings::ClearSuppressions()
 	OnSettingsChanged.Broadcast();
 }
 
+void UBPCheckSettings::ClearAll()
+{
+	Suppressions.Empty();
+	for (TPair<ESuggestion, bool>& P : SuggestionEnabled)
+	{
+		P.Value = true;
+	}
+	TryUpdateDefaultConfigFile();
+	OnSettingsChanged.Broadcast();
+}
+
 bool UBPCheckSettings::IsSuggestionEnabled(ESuggestion Suggestion) const
 {
 	const bool* Found = SuggestionEnabled.Find(Suggestion);
 	return Found ? *Found : true;
+}
+
+void UBPCheckSettings::SetSuggestionEnabled(ESuggestion S, bool bEnabled)
+{
+	SuggestionEnabled.Add(S, bEnabled);
+	TryUpdateDefaultConfigFile();
+	OnSettingsChanged.Broadcast();
 }
 
 void FAnalysisContext::AddFlags(FGuid NodeGuid, TSet<ENodeFlag> Flags)
