@@ -56,6 +56,7 @@ public:
 	virtual FName GetContainerName() const override { return TEXT("Project"); }
 	virtual FName GetCategoryName()  const override { return TEXT("Plugins"); }
 	virtual FName GetSectionName()   const override { return TEXT("BPCheck"); }
+	void PruneDeadNodes(UBlueprint* Blueprint, const TArray<FGuid>& AliveNodes);
 
 	UPROPERTY(Config, EditAnywhere, Category = "Suggestions")
 	TMap<ESuggestion, bool> SuggestionEnabled;

@@ -28,6 +28,20 @@ bool UBPCheckSettings::IsSuppressed(const UBlueprint* Blueprint, TOptional<FGuid
 	return Suppressions.Contains(FSuppression{ FSoftObjectPath(Blueprint), NodeGuid, Suggestion });
 }
 
+void UBPCheckSettings::PruneDeadNodes(UBlueprint* Blueprint, const TArray<FGuid>& AliveNodes)
+{
+	for (auto It = Suppressions.CreateIterator(); It; ++It)
+	{
+		if (It->Blueprint == FSoftObjectPath(Blueprint))
+		{
+			if (!AliveNodes.Contains(It->NodeGuid))
+			{
+				It.RemoveCurrent();
+			}
+		}
+	}
+}
+
 void UBPCheckSettings::Suppress(const UBlueprint* Blueprint, TOptional<FGuid> NodeGuid, ESuggestion Suggestion)
 {
 	Suppressions.Add({ FSoftObjectPath(Blueprint), NodeGuid, Suggestion });

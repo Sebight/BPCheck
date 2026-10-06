@@ -448,6 +448,17 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		return;
 	}
 
+	TArray<FGuid> AliveNodes;
+	TArray<UEdGraph*> Graphs;
+	CompilationContext.Blueprint->GetAllGraphs(Graphs);
+	for (auto Graph : Graphs)
+	{
+		for (auto Node : Graph->Nodes)
+		{
+			AliveNodes.Push(Node->NodeGuid);
+		}
+	}
+
 	double Seconds = 0.0;
 	FAnalyzerResult Result;
 	{
@@ -456,7 +467,7 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		Result = Analyzer.Analyze(CompilationContext, Data);
 	}
 
-	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
+	UBPCheckSettings* Settings = GetMutableDefault<UBPCheckSettings>();
 
 	for (auto& Suggestion : Result.Suggestions)
 	{
@@ -498,6 +509,7 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 		FMessageLog("BPCheck").AddMessage(Msg);
 	}
 
+	Settings->PruneDeadNodes(CompilationContext.Blueprint, AliveNodes);
 	FModuleManager::GetModuleChecked<FBPCheckEditorModule>("BPCheckEditor").SetSuggestionsForBlueprint(CompilationContext.Blueprint, Result.Suggestions);
 
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
