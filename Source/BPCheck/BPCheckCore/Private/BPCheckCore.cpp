@@ -34,7 +34,7 @@ void UBPCheckSettings::PruneDeadNodes(UBlueprint* Blueprint, const TArray<FGuid>
 	{
 		if (It->Blueprint == FSoftObjectPath(Blueprint))
 		{
-			if (!AliveNodes.Contains(It->NodeGuid))
+			if (It->NodeGuid.IsSet() && !AliveNodes.Contains(It->NodeGuid))
 			{
 				It.RemoveCurrent();
 			}
