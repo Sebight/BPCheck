@@ -99,10 +99,15 @@ public:
 class FBPCheckSettingsCustomization : public IDetailCustomization
 {
 public:
+	virtual ~FBPCheckSettingsCustomization();
 	static TSharedRef<IDetailCustomization> MakeInstance()
 	{
 		return MakeShared<FBPCheckSettingsCustomization>();
 	}
 
 	virtual void CustomizeDetails(IDetailLayoutBuilder& DetailBuilder) override;
+
+private:
+	TWeakPtr<IDetailsView> View;
+	FDelegateHandle SettingsHandle;
 };

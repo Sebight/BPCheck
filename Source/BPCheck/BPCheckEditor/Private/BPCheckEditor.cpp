@@ -559,8 +559,35 @@ int32 UBPCheckCommandlet::Main(const FString& String)
 	return 0;
 }
 
+FBPCheckSettingsCustomization::~FBPCheckSettingsCustomization()
+{
+	if (SettingsHandle.IsValid() && UObjectInitialized())
+	{
+		GetMutableDefault<UBPCheckSettings>()->OnSettingsChanged.Remove(SettingsHandle);
+	}
+}
+
 void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 {
+	View = B.GetDetailsViewSharedPtr();
+	if (!SettingsHandle.IsValid())
+	{
+		SettingsHandle = GetMutableDefault<UBPCheckSettings>()->OnSettingsChanged.AddLambda(
+			[WeakView = View]()
+			{
+				// Deferred so that it doesn't happen mid-broadcast
+				FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda(
+					[WeakView](float)
+					{
+						if (TSharedPtr<IDetailsView> V = WeakView.Pin())
+						{
+							V->ForceRefresh();
+						}
+						return false;
+					}));
+			});
+	}
+
 	TSharedRef<IPropertyHandle> MapHandle =
 		B.GetProperty(GET_MEMBER_NAME_CHECKED(UBPCheckSettings, SuggestionEnabled));
 	B.HideProperty(MapHandle);
@@ -609,10 +636,10 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 				})];
 	}
 
-	TWeakPtr<IDetailsView> View = B.GetDetailsViewSharedPtr();
-	auto Refresh = [View, &EditorModule]()
+	TWeakPtr<IDetailsView> CurrentView = B.GetDetailsViewSharedPtr();
+	auto Refresh = [CurrentView, &EditorModule]()
 		{
-			if (TSharedPtr<IDetailsView> V = View.Pin()) {
+			if (TSharedPtr<IDetailsView> V = CurrentView.Pin()) {
 				V->ForceRefresh();
 				EditorModule.ApplyNodeMarkers();
 			}
