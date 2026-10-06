@@ -569,6 +569,7 @@ FBPCheckSettingsCustomization::~FBPCheckSettingsCustomization()
 	}
 }
 
+// Note(Seb): I did use Claude to help me with designing the layout
 void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 {
 	View = B.GetDetailsViewSharedPtr();
@@ -596,7 +597,6 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 
 	const UEnum* Enum = StaticEnum<ESuggestion>();
 
-	// Node rows only. Blueprint-wide entries never reach this.
 	auto GetNodeLabel = [](const FSuppression& S) -> FText
 		{
 			if (const UBlueprint* BP = Cast<UBlueprint>(S.Blueprint.ResolveObject()))
