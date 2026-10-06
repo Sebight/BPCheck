@@ -617,6 +617,37 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 			return FText::FromString(TEXT("Blueprint-wide"));
 		};
 
+	auto AddRuleRow = [&](IDetailGroup& Group, const FSuppression& S, const FText& Scope, bool bSubdued)
+		{
+			const FString Code = GetSuggestionInfo(S.Suggestion).SuggestionCode;
+
+			Group.AddWidgetRow()
+				.FilterString(FText::FromString(Code))
+				.NameContent()
+				[
+					SNew(STextBlock).Text(FText::FromString(Code))
+				]
+				.ValueContent().HAlign(HAlign_Fill)
+				[
+					SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+						[
+							SNew(STextBlock)
+								.Text(Scope)
+								.ColorAndOpacity(bSubdued ? FSlateColor::UseSubduedForeground() : FSlateColor::UseForeground())
+						]
+						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+						[
+							PropertyCustomizationHelpers::MakeDeleteButton(
+								FSimpleDelegate::CreateLambda([S]()
+									{
+										GetMutableDefault<UBPCheckSettings>()->Unsuppress(S);
+									}),
+								INVTEXT("Remove suppression"))
+						]
+				];
+		};
+
 	for (int32 i = 0; i < Enum->NumEnums() - 1; ++i)
 	{
 		const ESuggestion Suggestion = static_cast<ESuggestion>(Enum->GetValueByIndex(i));
@@ -636,15 +667,6 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 				})];
 	}
 
-	TWeakPtr<IDetailsView> CurrentView = B.GetDetailsViewSharedPtr();
-	auto Refresh = [CurrentView, &EditorModule]()
-		{
-			if (TSharedPtr<IDetailsView> V = CurrentView.Pin()) {
-				V->ForceRefresh();
-				EditorModule.ApplyNodeMarkers();
-			}
-		};
-
 	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
 	IDetailCategoryBuilder& SupCat = B.EditCategory("Suppressions");
 
@@ -656,10 +678,9 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 			SNew(SButton)
 				.Text(INVTEXT("Clear all"))
 				.IsEnabled_Lambda([] { return GetDefault<UBPCheckSettings>()->Suppressions.Num() > 0; })
-				.OnClicked_Lambda([Refresh]()
+				.OnClicked_Lambda([]()
 					{
 						GetMutableDefault<UBPCheckSettings>()->ClearSuppressions();
-						Refresh();
 						return FReply::Handled();
 					})
 		]);
@@ -672,49 +693,54 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 		return;
 	}
 
+	TArray<FSuppression> ProjectWide;
 	TMap<FSoftObjectPath, TArray<FSuppression>> ByBlueprint;
 	for (const FSuppression& S : Settings->Suppressions)
 	{
-		ByBlueprint.FindOrAdd(S.Blueprint).Add(S);
+		if (S.Blueprint.IsNull()) ProjectWide.Add(S);
+		else                      ByBlueprint.FindOrAdd(S.Blueprint).Add(S);
 	}
 	ByBlueprint.KeySort([](const FSoftObjectPath& L, const FSoftObjectPath& R)
 		{
-			return L.ToString() < R.ToString();
+			return L.LexicalLess(R);
 		});
+
+	if (!ProjectWide.IsEmpty())
+	{
+		IDetailGroup& G = SupCat.AddGroup("ProjectWide",
+			FText::FromString(FString::Printf(TEXT("Project-wide (%d)"), ProjectWide.Num())), false, true);
+		for (const FSuppression& S : ProjectWide)
+		{
+			AddRuleRow(G, S, INVTEXT("All Blueprints"), true);
+		}
+	}
 
 	for (const auto& Pair : ByBlueprint)
 	{
+		TArray<const FSuppression*> BlueprintWide, Nodes;
+		for (const FSuppression& S : Pair.Value)
+		{
+			(S.NodeGuid.IsSet() ? Nodes : BlueprintWide).Add(&S);
+		}
+
 		IDetailGroup& Group = SupCat.AddGroup(
 			FName(*Pair.Key.ToString()),
 			FText::FromString(FString::Printf(TEXT("%s (%d)"), *Pair.Key.GetAssetName(), Pair.Value.Num())),
 			false, true);
 
-		for (const FSuppression& S : Pair.Value)
+		for (const FSuppression* S : BlueprintWide)
 		{
-			Group.AddWidgetRow()
-				.FilterString(FText::FromString(GetSuggestionInfo(S.Suggestion).SuggestionCode))
-				.NameContent()
-				[
-					SNew(STextBlock).Text(FText::FromString(GetSuggestionInfo(S.Suggestion).SuggestionCode))
-				]
-				.ValueContent().HAlign(HAlign_Fill)
-				[
-					SNew(SHorizontalBox)
-						+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
-						[
-							SNew(STextBlock).Text(GetNodeLabel(S))
-						]
-						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
-						[
-							PropertyCustomizationHelpers::MakeDeleteButton(
-								FSimpleDelegate::CreateLambda([S, Refresh]()
-									{
-										GetMutableDefault<UBPCheckSettings>()->Unsuppress(S);
-										Refresh();
-									}),
-								INVTEXT("Remove suppression"))
-						]
-				];
+			AddRuleRow(Group, *S, INVTEXT("Entire Blueprint"), true);
+		}
+
+		if (!Nodes.IsEmpty())
+		{
+			IDetailGroup& NodeGroup = Group.AddGroup("Nodes",
+				FText::FromString(FString::Printf(TEXT("Nodes (%d)"), Nodes.Num())), true);
+			for (const FSuppression* S : Nodes)
+			{
+				AddRuleRow(NodeGroup, *S, GetNodeLabel(*S), false);
+			}
 		}
 	}
 }
