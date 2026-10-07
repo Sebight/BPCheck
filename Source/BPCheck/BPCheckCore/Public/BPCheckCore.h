@@ -31,9 +31,26 @@ struct FSuggestionContext
 {
 	GENERATED_BODY()
 
-	ESuggestion Suggestion;
+	FSuggestionContext() = default;
+
+	FSuggestionContext(ESuggestion S, FGuid Node)
+	{
+		Suggestion = S;
+		NodeGuid = Node;
+		Scope = ESuggestionScope::Node;
+	}
+
+	FSuggestionContext(ESuggestion S, TWeakObjectPtr<const UEdGraph> G)
+	{
+		Suggestion = S;
+		Graph = G;
+		Scope = ESuggestionScope::Graph;
+	}
+
+	ESuggestion Suggestion = ESuggestion::None;
+	ESuggestionScope Scope = ESuggestionScope::None;
 	FGuid NodeGuid;
-	ESuggestionScope Scope;
+	TWeakObjectPtr<const UEdGraph> Graph;
 };
 
 USTRUCT()

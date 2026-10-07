@@ -136,24 +136,12 @@ void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 		UFunction* TargetFn = Call->GetTargetFunction();
 		if (InHotPath && Context.EffectsOf(TargetFn).Contains(EFunctionEffect::DebugSideEffect))
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::PrintInHotPath,
-					Call->NodeGuid,
-					ESuggestionScope::Node
-				}
-			);
+			Suggestions.Push(FSuggestionContext(ESuggestion::PrintInHotPath, Call->NodeGuid));
 		}
 
 		if (InHotPath && Context.EffectsOf(TargetFn).Contains(EFunctionEffect::ExpensiveActorQuery))
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::HotGetActorsOfClass,
-					Call->NodeGuid,
-					ESuggestionScope::Node
-				}
-			);
+			Suggestions.Push(FSuggestionContext(ESuggestion::HotGetActorsOfClass, Call->NodeGuid));
 		}
 	}
 }
@@ -165,13 +153,7 @@ void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Sugg
 		UClass* TargetClass = DynamicCast->TargetType;
 		if (TargetClass && Cast<UBlueprintGeneratedClass>(TargetClass))
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::HardCastToBPClass,
-					DynamicCast->NodeGuid,
-					ESuggestionScope::Node
-				}
-			);
+			Suggestions.Push(FSuggestionContext(ESuggestion::HardCastToBPClass, DynamicCast->NodeGuid));
 		}
 
 		if (!DynamicCast->IsNodePure())
@@ -179,13 +161,7 @@ void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Sugg
 			UEdGraphPin* FailPin = DynamicCast->GetInvalidCastPin();
 			if (FailPin && FailPin->LinkedTo.Num() == 0)
 			{
-				Suggestions.Push(
-					{
-						ESuggestion::CastWithoutFailHandler,
-						DynamicCast->NodeGuid,
-						ESuggestionScope::Node
-					}
-				);
+				Suggestions.Push(FSuggestionContext(ESuggestion::CastWithoutFailHandler, DynamicCast->NodeGuid));
 			}
 		}
 	}
@@ -224,24 +200,12 @@ void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& 
 			// This makes the chain warning only for the first disconnected
 			if (!AnyInputs)
 			{
-				Suggestions.Push(
-					{
-						ESuggestion::Unreachable,
-						Node->NodeGuid,
-						ESuggestionScope::Node
-					}
-				);
+				Suggestions.Push(FSuggestionContext(ESuggestion::Unreachable, Node->NodeGuid));
 			}
 		}
 		else
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::Disconnected,
-					Node->NodeGuid,
-					ESuggestionScope::Node
-				}
-			);
+			Suggestions.Push(FSuggestionContext(ESuggestion::Disconnected, Node->NodeGuid));
 		}
 
 	}
@@ -256,13 +220,7 @@ void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 		UFunction* TargetFn = Call->GetTargetFunction();
 		if (Context.EffectsOf(TargetFn).Contains(EFunctionEffect::Latent))
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::LatentNodeInLoop,
-					Call->NodeGuid,
-					ESuggestionScope::Node
-				}
-			);
+			Suggestions.Push(FSuggestionContext(ESuggestion::LatentNodeInLoop, Call->NodeGuid));
 		}
 	}
 }
@@ -273,6 +231,11 @@ void FGraphNodeCountRule::Check(const UEdGraph* Graph, TArray<FSuggestionContext
 	int32 GraphSize = Graph->Nodes.Num();
 
 	UE_LOG(LogBPCheckCore, Display, TEXT("%s=%d"), *GraphName, GraphSize);
+
+	if (GraphSize > 8)
+	{
+		Suggestions.Push(FSuggestionContext(ESuggestion::GraphSize, MakeWeakObjectPtr<const UEdGraph>(Graph)));
+	}
 }
 
 TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
