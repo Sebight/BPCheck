@@ -17,6 +17,15 @@ public:
 	virtual void ShutdownModule() override;
 };
 
+UENUM()
+enum class ESuggestionScope : uint8
+{
+	None		UMETA(DisplayName = "None"),
+	Node		UMETA(DisplayName = "Node"),
+	Graph		UMETA(DisplayName = "Graph"),
+	Blueprint	UMETA(DisplayName = "Blueprint")
+};
+
 USTRUCT()
 struct FSuggestionContext
 {
@@ -24,6 +33,7 @@ struct FSuggestionContext
 
 	ESuggestion Suggestion;
 	FGuid NodeGuid;
+	ESuggestionScope Scope;
 };
 
 USTRUCT()
