@@ -15,7 +15,8 @@ enum class ESuggestion : uint8
 	Unreachable				UMETA(DisplayName = "Unreachable"),
 	HotGetActorsOfClass		UMETA(DisplayName = "GetAllActorsOfClass In Tick"),
 	LatentNodeInLoop		UMETA(DisplayName = "Latent Node In Loop"),
-	GraphSize				UMETA(DisplayName = "Graph Size")
+	GraphSize				UMETA(DisplayName = "Graph Size"),
+	FunctionArgsCount		UMETA(DisplayName = "Function Arguments Count")
 };
 
 struct FSuggestionInfo
@@ -35,7 +36,8 @@ inline const FSuggestionInfo& GetSuggestionInfo(ESuggestion S)
 		{ ESuggestion::Unreachable, {"BP005", TEXT("Execution chain starting here is unreachable and will never run.")} },
 		{ ESuggestion::HotGetActorsOfClass, {"BP006", TEXT("'{Node}' in Tick performs a full world scan every frame, cache in BeginPlay if possible.")} },
 		{ ESuggestion::LatentNodeInLoop, {"BP007", TEXT("'{Node}' in loop body triggers all iterations in one frame. Use recursion or a timer instead.")} },
-		{ ESuggestion::GraphSize, {"BP008", TEXT("'{Blueprint}:{Graph}' exceeded the allowed limit of nodes.")}}
+		{ ESuggestion::GraphSize, {"BP008", TEXT("'{Blueprint}:{Graph}' exceeded the allowed limit of nodes.")}},
+		{ ESuggestion::FunctionArgsCount, {"BP009", TEXT("Function '{Graph}' exceeded the allowed limit of arguments.")}}
 	};
 
 	return Data[S];

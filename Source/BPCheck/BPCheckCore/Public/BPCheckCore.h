@@ -85,7 +85,10 @@ public:
 	void PruneDeadNodes(UBlueprint* Blueprint, const TArray<FGuid>& AliveNodes);
 
 	UPROPERTY(Config, EditAnywhere, Category = "Thresholds", meta = (ClampMin = 1, ToolTip = "Graphs with more nodes than this are flagged."))
-	int32 MaxGraphNodes = 8;
+	int32 MaxGraphNodes = 300;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Thresholds", meta = (ClampMin = 1, ToolTip = "Functions with more arguments than this are flagged."))
+	int32 MaxFunctionArguments = 7;
 
 	UPROPERTY(Config, EditAnywhere, Category = "Suggestions")
 	TMap<ESuggestion, bool> SuggestionEnabled;
@@ -196,6 +199,12 @@ public:
 };
 
 class BPCHECKCORE_API FGraphNodeCountRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FFunctionArgumentRule : public FAnalysisRule
 {
 public:
 	void Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;

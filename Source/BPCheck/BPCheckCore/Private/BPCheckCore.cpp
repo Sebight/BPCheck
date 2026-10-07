@@ -8,6 +8,7 @@
 #include "K2Node_MacroInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Kismet2/BlueprintEditorUtils.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -238,6 +239,40 @@ void FGraphNodeCountRule::Check(const UEdGraph* Graph, TArray<FSuggestionContext
 	}
 }
 
+void FFunctionArgumentRule::Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	const UBlueprint* BP = FBlueprintEditorUtils::FindBlueprintForGraph(Graph);
+	const bool bIsFunctionGraph = BP && BP->FunctionGraphs.Contains(Graph);
+
+	if (!bIsFunctionGraph) return;
+
+	auto FindFunc = [](const UBlueprint* BP, const UEdGraph* Graph) -> UFunction*
+		{
+			if (BP->GeneratedClass)
+			{
+				if (UFunction* Fn = BP->GeneratedClass->FindFunctionByName(Graph->GetFName()))
+				{
+					return Fn;
+				}
+			}
+
+			return nullptr;
+		};
+
+	UFunction* Func = FindFunc(BP, Graph);
+
+	int32 Count = 0;
+	for (TFieldIterator<FProperty> It(Func); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+	{
+		Count++;
+	}
+
+	if (Count > Context.Settings->MaxFunctionArguments)
+	{
+		Suggestions.Push(FSuggestionContext(ESuggestion::FunctionArgsCount, Graph));
+	}
+}
+
 TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
 {
 	BuildKnownEffects();
@@ -366,6 +401,7 @@ FAnalyzer::FAnalyzer()
 	Rules.Push(MakeUnique<FDeadCodeRule>());
 	Rules.Push(MakeUnique<FLatentNodeInLoopRule>());
 	Rules.Push(MakeUnique<FGraphNodeCountRule>());
+	Rules.Push(MakeUnique<FFunctionArgumentRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
