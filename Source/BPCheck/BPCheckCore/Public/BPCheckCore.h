@@ -47,6 +47,12 @@ struct FSuggestionContext
 		Scope = ESuggestionScope::Graph;
 	}
 
+	FSuggestionContext(ESuggestion S, ESuggestionScope Sc)
+	{
+		Suggestion = S;
+		Scope = Sc;
+	}
+
 	ESuggestion Suggestion = ESuggestion::None;
 	ESuggestionScope Scope = ESuggestionScope::None;
 	FGuid NodeGuid;
