@@ -139,7 +139,8 @@ void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 			Suggestions.Push(
 				{
 					ESuggestion::PrintInHotPath,
-					Call->NodeGuid
+					Call->NodeGuid,
+					ESuggestionScope::Node
 				}
 			);
 		}
@@ -149,7 +150,8 @@ void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 			Suggestions.Push(
 				{
 					ESuggestion::HotGetActorsOfClass,
-					Call->NodeGuid
+					Call->NodeGuid,
+					ESuggestionScope::Node
 				}
 			);
 		}
@@ -166,7 +168,8 @@ void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Sugg
 			Suggestions.Push(
 				{
 					ESuggestion::HardCastToBPClass,
-					DynamicCast->NodeGuid
+					DynamicCast->NodeGuid,
+					ESuggestionScope::Node
 				}
 			);
 		}
@@ -179,7 +182,8 @@ void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Sugg
 				Suggestions.Push(
 					{
 						ESuggestion::CastWithoutFailHandler,
-						DynamicCast->NodeGuid
+						DynamicCast->NodeGuid,
+						ESuggestionScope::Node
 					}
 				);
 			}
@@ -223,7 +227,8 @@ void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& 
 				Suggestions.Push(
 					{
 						ESuggestion::Unreachable,
-						Node->NodeGuid
+						Node->NodeGuid,
+						ESuggestionScope::Node
 					}
 				);
 			}
@@ -233,7 +238,8 @@ void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& 
 			Suggestions.Push(
 				{
 					ESuggestion::Disconnected,
-					Node->NodeGuid
+					Node->NodeGuid,
+					ESuggestionScope::Node
 				}
 			);
 		}
@@ -253,7 +259,8 @@ void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 			Suggestions.Push(
 				{
 					ESuggestion::LatentNodeInLoop,
-					Call->NodeGuid
+					Call->NodeGuid,
+					ESuggestionScope::Node
 				}
 			);
 		}
