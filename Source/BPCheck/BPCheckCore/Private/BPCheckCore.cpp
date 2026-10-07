@@ -232,7 +232,7 @@ void FGraphNodeCountRule::Check(const UEdGraph* Graph, TArray<FSuggestionContext
 
 	UE_LOG(LogBPCheckCore, Display, TEXT("%s=%d"), *GraphName, GraphSize);
 
-	if (GraphSize > 8)
+	if (GraphSize > Context.Settings->MaxGraphNodes)
 	{
 		Suggestions.Push(FSuggestionContext(ESuggestion::GraphSize, MakeWeakObjectPtr<const UEdGraph>(Graph)));
 	}
@@ -569,6 +569,7 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 	}
 
 	Context.EffectResolver = &EffectResolver;
+	Context.Settings = GetDefault<UBPCheckSettings>();
 
 	return Context;
 }

@@ -84,6 +84,9 @@ public:
 	virtual FName GetSectionName()   const override { return TEXT("BPCheck"); }
 	void PruneDeadNodes(UBlueprint* Blueprint, const TArray<FGuid>& AliveNodes);
 
+	UPROPERTY(Config, EditAnywhere, Category = "Thresholds", meta = (ClampMin = 1, ToolTip = "Graphs with more nodes than this are flagged."))
+	int32 MaxGraphNodes = 8;
+
 	UPROPERTY(Config, EditAnywhere, Category = "Suggestions")
 	TMap<ESuggestion, bool> SuggestionEnabled;
 
@@ -145,6 +148,8 @@ public:
 
 	bool IsDead(FGuid NodeGuid) const;
 	TSet<EFunctionEffect> EffectsOf(UFunction* Fn) const;
+
+	const UBPCheckSettings* Settings = nullptr;
 
 private:
 	friend class FAnalyzer;
