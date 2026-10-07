@@ -143,7 +143,10 @@ class BPCHECKCORE_API FAnalysisRule
 public:
 	FAnalysisRule() = default;
 	virtual ~FAnalysisRule() = default;
-	virtual void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) = 0;
+
+	virtual void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) {}
+	virtual void Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) {}
+	virtual void Check(const UBlueprint* Blueprint, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) {}
 };
 
 class BPCHECKCORE_API FExpensiveHotNodeRule : public FAnalysisRule
@@ -168,6 +171,12 @@ class BPCHECKCORE_API FLatentNodeInLoopRule : public FAnalysisRule
 {
 public:
 	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FGraphNodeCountRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
 };
 #pragma endregion
 

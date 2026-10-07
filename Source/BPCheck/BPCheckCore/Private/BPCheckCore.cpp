@@ -267,6 +267,14 @@ void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 	}
 }
 
+void FGraphNodeCountRule::Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	FString GraphName = Graph->GetName();
+	int32 GraphSize = Graph->Nodes.Num();
+
+	UE_LOG(LogBPCheckCore, Display, TEXT("%s=%d"), *GraphName, GraphSize);
+}
+
 TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
 {
 	BuildKnownEffects();
@@ -394,6 +402,7 @@ FAnalyzer::FAnalyzer()
 	Rules.Push(MakeUnique<FCastRule>());
 	Rules.Push(MakeUnique<FDeadCodeRule>());
 	Rules.Push(MakeUnique<FLatentNodeInLoopRule>());
+	Rules.Push(MakeUnique<FGraphNodeCountRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
@@ -410,6 +419,17 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	const FAnalysisContext Context = BuildContext(Blueprint);
 
 	TArray<FSuggestionContext> Suggestions;
+
+	TArray<UEdGraph*> Graphs;
+	Blueprint->GetAllGraphs(Graphs);
+	for (auto& Graph : Graphs)
+	{
+		for (const auto& Rule : Rules)
+		{
+			Rule->Check(Graph, Suggestions, Context);
+		}
+	}
+
 	for (auto& Page : Blueprint->UbergraphPages)
 	{
 		for (auto Node : Page->Nodes)
