@@ -55,8 +55,9 @@ struct FResultTreeItem
 	FString Description;
 	EItemSeverity Severity;
 	bool bIsGroup = false;
-	TWeakObjectPtr<UEdGraphNode> Node;
+	TWeakObjectPtr<const UObject> Target;
 	TArray<TSharedPtr<FResultTreeItem>> Children;
+	const FSlateBrush* Icon = nullptr;
 };
 
 class SBPCheckSuggestionsPanel : public SCompoundWidget

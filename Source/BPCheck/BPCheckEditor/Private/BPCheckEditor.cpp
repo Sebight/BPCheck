@@ -23,6 +23,7 @@
 #include "IDetailGroup.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Widgets/Input/SComboButton.h"
+#include "Styling/SlateIconFinder.h"
 
 #include "Suggestions.generated.h"
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -189,17 +190,26 @@ public:
 	{
 		if (Column == ColumnIds::Severity)
 		{
-			return SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
-				[SNew(SExpanderArrow, SharedThis(this)).IndentAmount(12)]
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2, 0)
-				[SNew(SImage).Image(GetIcon()).ColorAndOpacity(GetTint())];
+			return SNew(SBox)
+				.HAlign(HAlign_Center)
+				.VAlign(VAlign_Center)
+				[
+					SNew(SImage).Image(GetIcon()).ColorAndOpacity(GetTint())
+				];
 		}
 		if (Column == ColumnIds::Code)
 		{
-			return SNew(STextBlock)
-				.Text(FText::FromString(Item->Label))
-				.Font(FCoreStyle::GetDefaultFontStyle(Item->bIsGroup ? "Bold" : "Regular", 9));
+			return SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				[
+					SNew(SExpanderArrow, SharedThis(this)).IndentAmount(12)
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+				[
+					SNew(STextBlock)
+						.Text(FText::FromString(Item->Label))
+						.Font(FCoreStyle::GetDefaultFontStyle(Item->bIsGroup ? "Bold" : "Regular", 9))
+				];
 		}
 		if (Column == ColumnIds::Description)
 		{
@@ -213,6 +223,8 @@ public:
 private:
 	const FSlateBrush* GetIcon() const
 	{
+		if (Item->bIsGroup && Item->Icon) return Item->Icon;
+
 		switch (Item->Severity)
 		{
 		case EItemSeverity::Error:   return FAppStyle::Get().GetBrush("Icons.Error");
@@ -224,6 +236,8 @@ private:
 
 	FSlateColor GetTint() const
 	{
+		if (Item->bIsGroup && Item->Icon) return FSlateColor::UseForeground();
+
 		switch (Item->Severity)
 		{
 		case EItemSeverity::Error:   return FStyleColors::Error;
@@ -241,6 +255,21 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 	TArray<TSharedPtr<FResultTreeItem>> Roots;
 	const UBPCheckSettings* Settings = GetDefault<UBPCheckSettings>();
 
+	auto GetGraphBrush = [](const UEdGraph* Graph) -> const FSlateBrush*
+		{
+			if (const UEdGraphSchema* Schema = Graph->GetSchema())
+			{
+				switch (Schema->GetGraphType(Graph))
+				{
+				case GT_Function: return FAppStyle::Get().GetBrush("GraphEditor.Function_16x");
+				case GT_Macro:    return FAppStyle::Get().GetBrush("GraphEditor.Macro_16x");
+				default:          break;
+				}
+			}
+			return FAppStyle::Get().GetBrush("GraphEditor.EventGraph_16x");
+		};
+
+
 	for (const auto& Pair : Suggestions)
 	{
 		const UBlueprint* BP = Pair.Key;
@@ -249,7 +278,26 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 		TSharedPtr<FResultTreeItem> Group = MakeShared<FResultTreeItem>();
 		Group->bIsGroup = true;
 		Group->Severity = EItemSeverity::Group;
+		Group->Target = BP;
+		Group->Icon = FSlateIconFinder::FindIconBrushForClass(UBlueprint::StaticClass());
 
+		TMap<const UEdGraph*, TSharedPtr<FResultTreeItem>> GraphGroups;
+		auto GetGraphGroup = [&GraphGroups, &GetGraphBrush](const UEdGraph* G)
+			{
+				TSharedPtr<FResultTreeItem>& Slot = GraphGroups.FindOrAdd(G);
+				if (!Slot.IsValid())
+				{
+					Slot = MakeShared<FResultTreeItem>();
+					Slot->bIsGroup = true;
+					Slot->Severity = EItemSeverity::Group;
+					Slot->Target = G;
+					Slot->Label = G->GetName();
+					Slot->Icon = GetGraphBrush(G);
+				}
+				return Slot;
+			};
+
+		int32 Count = 0;
 		for (const FSuggestionContext& S : Pair.Value)
 		{
 			if (!Settings->IsSuggestionEnabled(S.Suggestion) || Settings->IsSuppressed(BP, { S.NodeGuid }, S.Suggestion))
@@ -258,21 +306,63 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 			}
 
 			const FSuggestionInfo& Info = GetSuggestionInfo(S.Suggestion);
-
 			TSharedPtr<FResultTreeItem> Leaf = MakeShared<FResultTreeItem>();
-			Leaf->Node = BPCheck::Editor::ResolveNode(BP, S.NodeGuid);
-			Leaf->Label = FString::Printf(TEXT("%s"), *Info.SuggestionCode);
-
+			TSharedPtr<FResultTreeItem> Parent = Group;
 			FStringFormatNamedArguments Args;
-			Args.Add(TEXT("Node"), FStringFormatArg(Leaf->Node->GetNodeTitle(ENodeTitleType::ListView).ToString()));
-			Leaf->Description = FString::Format(*Info.SuggestionDescription, Args);
 
+			switch (S.Scope)
+			{
+			case ESuggestionScope::Node:
+			{
+				const UEdGraphNode* Node = BPCheck::Editor::ResolveNode(BP, S.NodeGuid);
+				if (!Node) continue;
+				Leaf->Target = Node;
+				Args.Add(TEXT("Node"), FStringFormatArg(Node->GetNodeTitle(ENodeTitleType::ListView).ToString()));
+				Parent = GetGraphGroup(Node->GetGraph());
+				break;
+			}
+			case ESuggestionScope::Graph:
+			{
+				const UEdGraph* Graph = S.Graph.Get();
+				if (!Graph) continue;
+				Leaf->Target = Graph;
+				Args.Add(TEXT("Graph"), FStringFormatArg(Graph->GetName()));
+				Parent = GetGraphGroup(Graph);
+				break;
+			}
+			default:
+				Leaf->Target = BP;
+				break;
+			}
+
+			Args.Add(TEXT("Blueprint"), FStringFormatArg(BP->GetName()));
+			// TODO(Seb): These, but maybe with a different approach?
+			// Args.Add(TEXT("Value"), FStringFormatArg(S.Value));
+			// Args.Add(TEXT("Limit"), FStringFormatArg(S.Limit));
+
+			Leaf->Label = Info.SuggestionCode;
+			Leaf->Description = FString::Format(*Info.SuggestionDescription, Args);
 			Leaf->Severity = EItemSeverity::Warning;
-			Group->Children.Add(Leaf);
+
+			Parent->Children.Add(Leaf);
+			++Count;
 		}
 
-		if (Group->Children.Num() == 0) continue;
-		Group->Label = FString::Printf(TEXT("%s (%d)"), *BP->GetName(), Group->Children.Num());
+		if (Count == 0) continue;
+
+		TArray<TSharedPtr<FResultTreeItem>> GraphItems;
+		GraphGroups.GenerateValueArray(GraphItems);
+		GraphItems.Sort([](const TSharedPtr<FResultTreeItem>& A, const TSharedPtr<FResultTreeItem>& B)
+			{
+				return A->Label < B->Label;
+			});
+		for (const TSharedPtr<FResultTreeItem>& G : GraphItems)
+		{
+			G->Label = FString::Printf(TEXT("%s (%d)"), *G->Label, G->Children.Num());
+			Group->Children.Add(G);
+		}
+
+		Group->Label = FString::Printf(TEXT("%s (%d)"), *BP->GetName(), Count);
 		Roots.Add(Group);
 	}
 	return Roots;
@@ -291,6 +381,8 @@ void FBPCheckEditorModule::ApplyNodeMarkers()
 		for (const auto& Suggestion : Pair.Value)
 		{
 			UEdGraphNode* Node = BPCheck::Editor::ResolveNode(BP, Suggestion.NodeGuid);
+
+			if (!Node) continue;
 
 			if (Settings->IsSuggestionEnabled(Suggestion.Suggestion) && !Settings->IsSuppressed(BP, { Suggestion.NodeGuid }, Suggestion.Suggestion))
 			{
@@ -398,7 +490,7 @@ void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
 				.HeaderRow(
 					SNew(SHeaderRow)
 					+ SHeaderRow::Column(ColumnIds::Severity)
-					.DefaultLabel(FText::GetEmpty()).FixedWidth(48.0f)
+					.DefaultLabel(FText::GetEmpty()).FixedWidth(28.0f)
 					+ SHeaderRow::Column(ColumnIds::Code)
 					.DefaultLabel(LOCTEXT("ColCode", "Code")).FillWidth(0.25f)
 					+ SHeaderRow::Column(ColumnIds::Description)
@@ -437,8 +529,15 @@ void SBPCheckSuggestionsPanel::OnItemDoubleClicked(TSharedPtr<FResultTreeItem> I
 {
 	if (!Item.IsValid()) return;
 
-	const UObject* Resolved = Item->Node.Get();
-	FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(Resolved);
+	const UObject* Target = Item->Target.Get();
+	if (!Target) return;
+
+	if (const UBlueprint* BP = Cast<UBlueprint>(Target))
+	{
+		GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAsset(const_cast<UBlueprint*>(BP));
+	}
+
+	FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(Target);
 }
 
 void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
@@ -478,37 +577,57 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 			continue;
 		}
 
-		UEdGraphNode* Node = BPCheck::Editor::ResolveNode(CompilationContext.Blueprint, Suggestion.NodeGuid);
-		if (!Node)
-		{
-			// Couldn't properly resolve the reported node? Should probably warn...
-		}
-
 		const FSuggestionInfo& Info = GetSuggestionInfo(Suggestion.Suggestion);
 
-		TSharedRef<FTokenizedMessage> Msg = FTokenizedMessage::Create(EMessageSeverity::Warning);
-		Msg->AddToken(FTextToken::Create(FText::FromString(Info.SuggestionCode)));
+		if (Suggestion.Scope == ESuggestionScope::Graph)
+		{
+			TSharedRef<FTokenizedMessage> Msg = FTokenizedMessage::Create(EMessageSeverity::Warning);
+			Msg->AddToken(FTextToken::Create(FText::FromString(Info.SuggestionCode)));
 
-		// Note(Seb): I wasn't able to make it work without adding the Callback, which forces the open in the node editor...
-		Msg->AddToken(FUObjectToken::Create(Node, Node->GetNodeTitle(ENodeTitleType::ListView))->OnMessageTokenActivated(
-			FOnMessageTokenActivated::CreateLambda([](const TSharedRef<IMessageToken>& Token)
-				{
-					const TSharedRef<FUObjectToken> Obj = StaticCastSharedRef<FUObjectToken>(Token);
-					if (UObject* Resolved = Obj->GetObject().Get())
-						FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(Resolved);
-				})));
+			FStringFormatNamedArguments Args;
+			Args.Add(TEXT("Graph"), FStringFormatArg(Suggestion.Graph->GetName()));
+			Args.Add(TEXT("Blueprint"), FStringFormatArg(CompilationContext.Blueprint->GetName()));
 
-		FStringFormatNamedArguments Args;
-		Args.Add(TEXT("Node"), FStringFormatArg(Node->GetNodeTitle(ENodeTitleType::ListView).ToString()));
-		FString Description = FString::Format(*Info.SuggestionDescription, Args);
+			FString Description = FString::Format(*Info.SuggestionDescription, Args);
 
-		Msg->AddToken(FTextToken::Create(FText::FromString(Description)));
+			Msg->AddToken(FTextToken::Create(FText::FromString(Description)));
 
-		Node->bHasCompilerMessage = true;
-		Node->ErrorType = static_cast<int32>(EMessageSeverity::Info);
-		Node->ErrorMsg = FString::Printf(TEXT("BPCheck: %s\n%s"), *Info.SuggestionCode, *Description);
+			FMessageLog("BPCheck").AddMessage(Msg);
+		}
+		else if (Suggestion.Scope == ESuggestionScope::Node)
+		{
+			UEdGraphNode* Node = BPCheck::Editor::ResolveNode(CompilationContext.Blueprint, Suggestion.NodeGuid);
 
-		FMessageLog("BPCheck").AddMessage(Msg);
+			if (!Node)
+			{
+				UE_LOG(LogBPCheckEditor, Warning, TEXT("Could not resolve node."));
+				return;
+			}
+
+			TSharedRef<FTokenizedMessage> Msg = FTokenizedMessage::Create(EMessageSeverity::Warning);
+			Msg->AddToken(FTextToken::Create(FText::FromString(Info.SuggestionCode)));
+
+			// Note(Seb): I wasn't able to make it work without adding the Callback, which forces the open in the node editor...
+			Msg->AddToken(FUObjectToken::Create(Node, Node->GetNodeTitle(ENodeTitleType::ListView))->OnMessageTokenActivated(
+				FOnMessageTokenActivated::CreateLambda([](const TSharedRef<IMessageToken>& Token)
+					{
+						const TSharedRef<FUObjectToken> Obj = StaticCastSharedRef<FUObjectToken>(Token);
+						if (UObject* Resolved = Obj->GetObject().Get())
+							FKismetEditorUtilities::BringKismetToFocusAttentionOnObject(Resolved);
+					})));
+
+			FStringFormatNamedArguments Args;
+			Args.Add(TEXT("Node"), FStringFormatArg(Node->GetNodeTitle(ENodeTitleType::ListView).ToString()));
+			FString Description = FString::Format(*Info.SuggestionDescription, Args);
+
+			Msg->AddToken(FTextToken::Create(FText::FromString(Description)));
+
+			Node->bHasCompilerMessage = true;
+			Node->ErrorType = static_cast<int32>(EMessageSeverity::Info);
+			Node->ErrorMsg = FString::Printf(TEXT("BPCheck: %s\n%s"), *Info.SuggestionCode, *Description);
+
+			FMessageLog("BPCheck").AddMessage(Msg);
+		}
 	}
 
 	Settings->PruneDeadNodes(CompilationContext.Blueprint, AliveNodes);

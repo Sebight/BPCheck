@@ -8,6 +8,7 @@
 #include "K2Node_MacroInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "Kismet2/BlueprintEditorUtils.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
 
@@ -136,22 +137,12 @@ void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 		UFunction* TargetFn = Call->GetTargetFunction();
 		if (InHotPath && Context.EffectsOf(TargetFn).Contains(EFunctionEffect::DebugSideEffect))
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::PrintInHotPath,
-					Call->NodeGuid
-				}
-			);
+			Suggestions.Push(FSuggestionContext(ESuggestion::PrintInHotPath, Call->NodeGuid));
 		}
 
 		if (InHotPath && Context.EffectsOf(TargetFn).Contains(EFunctionEffect::ExpensiveActorQuery))
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::HotGetActorsOfClass,
-					Call->NodeGuid
-				}
-			);
+			Suggestions.Push(FSuggestionContext(ESuggestion::HotGetActorsOfClass, Call->NodeGuid));
 		}
 	}
 }
@@ -163,12 +154,7 @@ void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Sugg
 		UClass* TargetClass = DynamicCast->TargetType;
 		if (TargetClass && Cast<UBlueprintGeneratedClass>(TargetClass))
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::HardCastToBPClass,
-					DynamicCast->NodeGuid
-				}
-			);
+			Suggestions.Push(FSuggestionContext(ESuggestion::HardCastToBPClass, DynamicCast->NodeGuid));
 		}
 
 		if (!DynamicCast->IsNodePure())
@@ -176,12 +162,7 @@ void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Sugg
 			UEdGraphPin* FailPin = DynamicCast->GetInvalidCastPin();
 			if (FailPin && FailPin->LinkedTo.Num() == 0)
 			{
-				Suggestions.Push(
-					{
-						ESuggestion::CastWithoutFailHandler,
-						DynamicCast->NodeGuid
-					}
-				);
+				Suggestions.Push(FSuggestionContext(ESuggestion::CastWithoutFailHandler, DynamicCast->NodeGuid));
 			}
 		}
 	}
@@ -220,22 +201,12 @@ void FDeadCodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& 
 			// This makes the chain warning only for the first disconnected
 			if (!AnyInputs)
 			{
-				Suggestions.Push(
-					{
-						ESuggestion::Unreachable,
-						Node->NodeGuid
-					}
-				);
+				Suggestions.Push(FSuggestionContext(ESuggestion::Unreachable, Node->NodeGuid));
 			}
 		}
 		else
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::Disconnected,
-					Node->NodeGuid
-				}
-			);
+			Suggestions.Push(FSuggestionContext(ESuggestion::Disconnected, Node->NodeGuid));
 		}
 
 	}
@@ -250,13 +221,55 @@ void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 		UFunction* TargetFn = Call->GetTargetFunction();
 		if (Context.EffectsOf(TargetFn).Contains(EFunctionEffect::Latent))
 		{
-			Suggestions.Push(
-				{
-					ESuggestion::LatentNodeInLoop,
-					Call->NodeGuid
-				}
-			);
+			Suggestions.Push(FSuggestionContext(ESuggestion::LatentNodeInLoop, Call->NodeGuid));
 		}
+	}
+}
+
+void FGraphNodeCountRule::Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	FString GraphName = Graph->GetName();
+	int32 GraphSize = Graph->Nodes.Num();
+
+	UE_LOG(LogBPCheckCore, Display, TEXT("%s=%d"), *GraphName, GraphSize);
+
+	if (GraphSize > Context.Settings->MaxGraphNodes)
+	{
+		Suggestions.Push(FSuggestionContext(ESuggestion::GraphSize, MakeWeakObjectPtr<const UEdGraph>(Graph)));
+	}
+}
+
+void FFunctionArgumentRule::Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	const UBlueprint* BP = FBlueprintEditorUtils::FindBlueprintForGraph(Graph);
+	const bool bIsFunctionGraph = BP && BP->FunctionGraphs.Contains(Graph);
+
+	if (!bIsFunctionGraph) return;
+
+	auto FindFunc = [](const UBlueprint* BP, const UEdGraph* Graph) -> UFunction*
+		{
+			if (BP->GeneratedClass)
+			{
+				if (UFunction* Fn = BP->GeneratedClass->FindFunctionByName(Graph->GetFName()))
+				{
+					return Fn;
+				}
+			}
+
+			return nullptr;
+		};
+
+	UFunction* Func = FindFunc(BP, Graph);
+
+	int32 Count = 0;
+	for (TFieldIterator<FProperty> It(Func); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
+	{
+		Count++;
+	}
+
+	if (Count > Context.Settings->MaxFunctionArguments)
+	{
+		Suggestions.Push(FSuggestionContext(ESuggestion::FunctionArgsCount, Graph));
 	}
 }
 
@@ -387,6 +400,8 @@ FAnalyzer::FAnalyzer()
 	Rules.Push(MakeUnique<FCastRule>());
 	Rules.Push(MakeUnique<FDeadCodeRule>());
 	Rules.Push(MakeUnique<FLatentNodeInLoopRule>());
+	Rules.Push(MakeUnique<FGraphNodeCountRule>());
+	Rules.Push(MakeUnique<FFunctionArgumentRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
@@ -403,6 +418,17 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 	const FAnalysisContext Context = BuildContext(Blueprint);
 
 	TArray<FSuggestionContext> Suggestions;
+
+	TArray<UEdGraph*> Graphs;
+	Blueprint->GetAllGraphs(Graphs);
+	for (auto& Graph : Graphs)
+	{
+		for (const auto& Rule : Rules)
+		{
+			Rule->Check(Graph, Suggestions, Context);
+		}
+	}
+
 	for (auto& Page : Blueprint->UbergraphPages)
 	{
 		for (auto Node : Page->Nodes)
@@ -579,6 +605,7 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 	}
 
 	Context.EffectResolver = &EffectResolver;
+	Context.Settings = GetDefault<UBPCheckSettings>();
 
 	return Context;
 }

@@ -17,13 +17,46 @@ public:
 	virtual void ShutdownModule() override;
 };
 
+UENUM()
+enum class ESuggestionScope : uint8
+{
+	None		UMETA(DisplayName = "None"),
+	Node		UMETA(DisplayName = "Node"),
+	Graph		UMETA(DisplayName = "Graph"),
+	Blueprint	UMETA(DisplayName = "Blueprint")
+};
+
 USTRUCT()
 struct FSuggestionContext
 {
 	GENERATED_BODY()
 
-	ESuggestion Suggestion;
+	FSuggestionContext() = default;
+
+	FSuggestionContext(ESuggestion S, FGuid Node)
+	{
+		Suggestion = S;
+		NodeGuid = Node;
+		Scope = ESuggestionScope::Node;
+	}
+
+	FSuggestionContext(ESuggestion S, TWeakObjectPtr<const UEdGraph> G)
+	{
+		Suggestion = S;
+		Graph = G;
+		Scope = ESuggestionScope::Graph;
+	}
+
+	FSuggestionContext(ESuggestion S, ESuggestionScope Sc)
+	{
+		Suggestion = S;
+		Scope = Sc;
+	}
+
+	ESuggestion Suggestion = ESuggestion::None;
+	ESuggestionScope Scope = ESuggestionScope::None;
 	FGuid NodeGuid;
+	TWeakObjectPtr<const UEdGraph> Graph;
 };
 
 USTRUCT()
@@ -56,6 +89,12 @@ public:
 	virtual FName GetCategoryName()  const override { return TEXT("Plugins"); }
 	virtual FName GetSectionName()   const override { return TEXT("BPCheck"); }
 	void PruneDeadNodes(UBlueprint* Blueprint, const TArray<FGuid>& AliveNodes);
+
+	UPROPERTY(Config, EditAnywhere, Category = "Thresholds", meta = (ClampMin = 1, ToolTip = "Graphs with more nodes than this are flagged."))
+	int32 MaxGraphNodes = 300;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Thresholds", meta = (ClampMin = 1, ToolTip = "Functions with more arguments than this are flagged."))
+	int32 MaxFunctionArguments = 7;
 
 	UPROPERTY(Config, EditAnywhere, Category = "Suggestions")
 	TMap<ESuggestion, bool> SuggestionEnabled;
@@ -119,6 +158,8 @@ public:
 	bool IsDead(FGuid NodeGuid) const;
 	TSet<EFunctionEffect> EffectsOf(UFunction* Fn) const;
 
+	const UBPCheckSettings* Settings = nullptr;
+
 private:
 	friend class FAnalyzer;
 
@@ -133,7 +174,10 @@ class BPCHECKCORE_API FAnalysisRule
 public:
 	FAnalysisRule() = default;
 	virtual ~FAnalysisRule() = default;
-	virtual void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) = 0;
+
+	virtual void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) {}
+	virtual void Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) {}
+	virtual void Check(const UBlueprint* Blueprint, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) {}
 };
 
 class BPCHECKCORE_API FExpensiveHotNodeRule : public FAnalysisRule
@@ -158,6 +202,18 @@ class BPCHECKCORE_API FLatentNodeInLoopRule : public FAnalysisRule
 {
 public:
 	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FGraphNodeCountRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FFunctionArgumentRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
 };
 #pragma endregion
 
