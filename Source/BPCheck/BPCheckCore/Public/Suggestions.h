@@ -16,7 +16,8 @@ enum class ESuggestion : uint8
 	HotGetActorsOfClass		UMETA(DisplayName = "GetAllActorsOfClass In Tick"),
 	LatentNodeInLoop		UMETA(DisplayName = "Latent Node In Loop"),
 	GraphSize				UMETA(DisplayName = "Graph Size"),
-	FunctionArgsCount		UMETA(DisplayName = "Function Arguments Count")
+	FunctionArgsCount		UMETA(DisplayName = "Function Arguments Count"),
+	UnusedTick				UMETA(DisplayName = "Unused Tick")
 };
 
 struct FSuggestionInfo
@@ -37,7 +38,8 @@ inline const FSuggestionInfo& GetSuggestionInfo(ESuggestion S)
 		{ ESuggestion::HotGetActorsOfClass, {"BP006", TEXT("'{Node}' in Tick performs a full world scan every frame, cache in BeginPlay if possible.")} },
 		{ ESuggestion::LatentNodeInLoop, {"BP007", TEXT("'{Node}' in loop body triggers all iterations in one frame. Use recursion or a timer instead.")} },
 		{ ESuggestion::GraphSize, {"BP008", TEXT("'{Blueprint}:{Graph}' exceeded the allowed limit of nodes.")}},
-		{ ESuggestion::FunctionArgsCount, {"BP009", TEXT("Function '{Graph}' exceeded the allowed limit of arguments.")}}
+		{ ESuggestion::FunctionArgsCount, {"BP009", TEXT("Function '{Graph}' exceeded the allowed limit of arguments.")}},
+		{ ESuggestion::UnusedTick, {"BP010", TEXT("Unused Tick introduces slight unnecessary overhead, delete it.")}}
 	};
 
 	return Data[S];

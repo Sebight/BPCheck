@@ -273,6 +273,30 @@ void FFunctionArgumentRule::Check(const UEdGraph* Graph, TArray<FSuggestionConte
 	}
 }
 
+void FEmptyEventHandlerRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	if (const UK2Node_Event* Event = Cast<UK2Node_Event>(Node))
+	{
+		bool ConnectedToAnything = false;
+		for (auto* Pin : Event->Pins)
+		{
+			if (Pin->Direction == EGPD_Output)
+			{
+				if (Pin->HasAnyConnections())
+				{
+					ConnectedToAnything = true;
+					break;
+				}
+			}
+		}
+
+		if (Event->GetFunctionName() == "ReceiveTick" && !ConnectedToAnything)
+		{
+			Suggestions.Push(FSuggestionContext(ESuggestion::UnusedTick, Event->NodeGuid));
+		}
+	}
+}
+
 TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
 {
 	BuildKnownEffects();
@@ -402,6 +426,7 @@ FAnalyzer::FAnalyzer()
 	Rules.Push(MakeUnique<FLatentNodeInLoopRule>());
 	Rules.Push(MakeUnique<FGraphNodeCountRule>());
 	Rules.Push(MakeUnique<FFunctionArgumentRule>());
+	Rules.Push(MakeUnique<FEmptyEventHandlerRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
