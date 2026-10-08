@@ -221,6 +221,12 @@ class BPCHECKCORE_API FEmptyEventHandlerRule : public FAnalysisRule
 public:
 	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
 };
+
+class BPCHECKCORE_API FLoopNestingRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
 #pragma endregion
 
 struct FNextExecNode

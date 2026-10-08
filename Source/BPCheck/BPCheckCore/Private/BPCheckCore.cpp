@@ -306,6 +306,26 @@ void FEmptyEventHandlerRule::Check(const UEdGraphNode* Node, TArray<FSuggestionC
 	}
 }
 
+void FLoopNestingRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	bool bIsLoop = false;
+	if (const UK2Node_MacroInstance* MacroInstance = Cast<UK2Node_MacroInstance>(Node))
+	{
+		FString Name = MacroInstance->GetMacroGraph()->GetName();
+		if (Name.Equals("ForLoop") || Name.Equals("ForEachLoop") || Name.Equals("WhileLoop"))
+		{
+			bIsLoop = true;
+		}
+	}
+
+	if (!bIsLoop) return;
+
+	if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
+	{
+		Suggestions.Push(FSuggestionContext(ESuggestion::NestedLoops, Node->NodeGuid));
+	}
+}
+
 TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
 {
 	BuildKnownEffects();
