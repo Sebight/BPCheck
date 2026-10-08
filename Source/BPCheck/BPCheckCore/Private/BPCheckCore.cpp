@@ -5,6 +5,7 @@
 #include "K2Node_CallFunction.h"
 #include "K2Node_DynamicCast.h"
 #include "K2Node_FunctionEntry.h"
+#include "K2Node_IfThenElse.h"
 #include "K2Node_MacroInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -326,6 +327,29 @@ void FLoopNestingRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext
 	}
 }
 
+void FRedundantBranchRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	if (const UK2Node_IfThenElse* Branch = Cast<UK2Node_IfThenElse>(Node))
+	{
+		TArray<FNextExecNode> Outputs = FAnalyzer::GetNextExecNode(Node);
+
+		FNextExecNode* True = Outputs.FindByPredicate([&](const FNextExecNode& Item)
+			{
+				return Item.PinIndex == 0;
+			});
+
+		FNextExecNode* False = Outputs.FindByPredicate([&](const FNextExecNode& Item)
+			{
+				return Item.PinIndex == 1;
+			});
+
+		if (True && False && (True->Node == False->Node))
+		{
+			Suggestions.Push(FSuggestionContext(ESuggestion::RedundantBranch, Node->NodeGuid));
+		}
+	}
+}
+
 TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
 {
 	BuildKnownEffects();
@@ -456,6 +480,8 @@ FAnalyzer::FAnalyzer()
 	Rules.Push(MakeUnique<FGraphNodeCountRule>());
 	Rules.Push(MakeUnique<FFunctionArgumentRule>());
 	Rules.Push(MakeUnique<FEmptyEventHandlerRule>());
+	Rules.Push(MakeUnique<FLoopNestingRule>());
+	Rules.Push(MakeUnique<FRedundantBranchRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
