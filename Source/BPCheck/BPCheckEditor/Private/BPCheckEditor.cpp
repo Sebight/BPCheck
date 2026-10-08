@@ -382,6 +382,8 @@ void FBPCheckEditorModule::ApplyNodeMarkers()
 		{
 			UEdGraphNode* Node = BPCheck::Editor::ResolveNode(BP, Suggestion.NodeGuid);
 
+			if (!Node) continue;
+
 			if (Settings->IsSuggestionEnabled(Suggestion.Suggestion) && !Settings->IsSuppressed(BP, { Suggestion.NodeGuid }, Suggestion.Suggestion))
 			{
 				const FSuggestionInfo& Info = GetSuggestionInfo(Suggestion.Suggestion);
