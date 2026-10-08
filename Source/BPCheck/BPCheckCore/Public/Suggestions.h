@@ -17,7 +17,8 @@ enum class ESuggestion : uint8
 	LatentNodeInLoop		UMETA(DisplayName = "Latent Node In Loop"),
 	GraphSize				UMETA(DisplayName = "Graph Size"),
 	FunctionArgsCount		UMETA(DisplayName = "Function Arguments Count"),
-	UnusedTick				UMETA(DisplayName = "Unused Tick")
+	UnusedTick				UMETA(DisplayName = "Unused Tick"),
+	EmptyEventHandler		UMETA(DisplayName = "Empty Event Handler")
 };
 
 struct FSuggestionInfo
@@ -39,7 +40,8 @@ inline const FSuggestionInfo& GetSuggestionInfo(ESuggestion S)
 		{ ESuggestion::LatentNodeInLoop, {"BP007", TEXT("'{Node}' in loop body triggers all iterations in one frame. Use recursion or a timer instead.")} },
 		{ ESuggestion::GraphSize, {"BP008", TEXT("'{Blueprint}:{Graph}' exceeded the allowed limit of nodes.")}},
 		{ ESuggestion::FunctionArgsCount, {"BP009", TEXT("Function '{Graph}' exceeded the allowed limit of arguments.")}},
-		{ ESuggestion::UnusedTick, {"BP010", TEXT("Unused Tick introduces slight unnecessary overhead, delete it.")}}
+		{ ESuggestion::UnusedTick, {"BP010", TEXT("Unused Tick introduces slight unnecessary overhead, delete it.")}},
+		{ ESuggestion::EmptyEventHandler, {"BP011", TEXT("Empty '{Node}' introduces slight unnecessary overhead, delete it.")}}
 	};
 
 	return Data[S];

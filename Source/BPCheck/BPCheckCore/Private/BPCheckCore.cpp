@@ -294,6 +294,10 @@ void FEmptyEventHandlerRule::Check(const UEdGraphNode* Node, TArray<FSuggestionC
 		{
 			Suggestions.Push(FSuggestionContext(ESuggestion::UnusedTick, Event->NodeGuid));
 		}
+		else if (!ConnectedToAnything)
+		{
+			Suggestions.Push(FSuggestionContext(ESuggestion::EmptyEventHandler, Event->NodeGuid));
+		}
 	}
 }
 
