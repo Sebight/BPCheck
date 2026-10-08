@@ -57,6 +57,7 @@ struct FSuggestionContext
 	ESuggestionScope Scope = ESuggestionScope::None;
 	FGuid NodeGuid;
 	TWeakObjectPtr<const UEdGraph> Graph;
+	FString Subject;
 };
 
 USTRUCT()

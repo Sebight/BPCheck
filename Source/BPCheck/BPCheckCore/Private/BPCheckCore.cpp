@@ -363,7 +363,10 @@ void FUnusedVariableRule::Check(const UBlueprint* Blueprint, TArray<FSuggestionC
 
 	for (const auto& Var : UnusedVars)
 	{
-		Suggestions.Push(FSuggestionContext(ESuggestion::UnusedVariable, ESuggestionScope::Blueprint));
+		FSuggestionContext Ctx = FSuggestionContext(ESuggestion::UnusedVariable, ESuggestionScope::Blueprint);
+		Ctx.Subject = Var;
+
+		Suggestions.Push(Ctx);
 	}
 }
 

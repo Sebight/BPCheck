@@ -49,7 +49,7 @@ inline const FSuggestionInfo& GetSuggestionInfo(ESuggestion S)
 		{ ESuggestion::CastInLoop, {"BP012", TEXT("'{Node}' in loop body casts on every iteration. If the input does not change per iteration, cast once before the loop and reuse the result.")} },
 		{ ESuggestion::NestedLoops, {"BP013", TEXT("Cost for nested loops grows with iteration counts. Remove the nesting if possible.")} },
 		{ ESuggestion::RedundantBranch, {"BP014", TEXT("'{Node}' is a redundant branch: its condition is a constant or both outputs lead to the same node. Remove it.")} },
-		{ ESuggestion::UnusedVariable, {"BP015", TEXT("Variable unused.")} },
+		{ ESuggestion::UnusedVariable, {"BP015", TEXT("'Variable {Variable}' is unused and can be removed.")} },
 	};
 
 	return Data[S];
