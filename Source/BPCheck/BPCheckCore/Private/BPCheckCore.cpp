@@ -350,6 +350,23 @@ void FRedundantBranchRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCon
 	}
 }
 
+void FUnusedVariableRule::Check(const UBlueprint* Blueprint, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	TArray<FString> UnusedVars;
+	for (const auto& Var : Blueprint->NewVariables)
+	{
+		if (!FBlueprintEditorUtils::IsVariableUsed(Blueprint, Var.VarName))
+		{
+			UnusedVars.Push(Var.VarName.ToString());
+		}
+	}
+
+	for (const auto& Var : UnusedVars)
+	{
+		Suggestions.Push(FSuggestionContext(ESuggestion::UnusedVariable, ESuggestionScope::Blueprint));
+	}
+}
+
 TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
 {
 	BuildKnownEffects();
@@ -482,6 +499,7 @@ FAnalyzer::FAnalyzer()
 	Rules.Push(MakeUnique<FEmptyEventHandlerRule>());
 	Rules.Push(MakeUnique<FLoopNestingRule>());
 	Rules.Push(MakeUnique<FRedundantBranchRule>());
+	Rules.Push(MakeUnique<FUnusedVariableRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
@@ -499,6 +517,13 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 
 	TArray<FSuggestionContext> Suggestions;
 
+	// Blueprint scope
+	for (const auto& Rule : Rules)
+	{
+		Rule->Check(Blueprint, Suggestions, Context);
+	}
+
+	// Graph scope
 	TArray<UEdGraph*> Graphs;
 	Blueprint->GetAllGraphs(Graphs);
 	for (auto& Graph : Graphs)
@@ -509,6 +534,7 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 		}
 	}
 
+	// Nodes scope
 	for (auto& Page : Blueprint->UbergraphPages)
 	{
 		for (auto Node : Page->Nodes)

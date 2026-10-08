@@ -21,7 +21,8 @@ enum class ESuggestion : uint8
 	EmptyEventHandler		UMETA(DisplayName = "Empty Event Handler"),
 	CastInLoop				UMETA(DisplayName = "Cast In Loop"),
 	NestedLoops				UMETA(DisplayName = "Nested Loops"),
-	RedundantBranch			UMETA(DisplayName = "Redundant Branch")
+	RedundantBranch			UMETA(DisplayName = "Redundant Branch"),
+	UnusedVariable			UMETA(DisplayName = "Unused Variable")
 };
 
 struct FSuggestionInfo
@@ -48,6 +49,7 @@ inline const FSuggestionInfo& GetSuggestionInfo(ESuggestion S)
 		{ ESuggestion::CastInLoop, {"BP012", TEXT("'{Node}' in loop body casts on every iteration. If the input does not change per iteration, cast once before the loop and reuse the result.")} },
 		{ ESuggestion::NestedLoops, {"BP013", TEXT("Cost for nested loops grows with iteration counts. Remove the nesting if possible.")} },
 		{ ESuggestion::RedundantBranch, {"BP014", TEXT("'{Node}' is a redundant branch: its condition is a constant or both outputs lead to the same node. Remove it.")} },
+		{ ESuggestion::UnusedVariable, {"BP015", TEXT("Variable unused.")} },
 	};
 
 	return Data[S];

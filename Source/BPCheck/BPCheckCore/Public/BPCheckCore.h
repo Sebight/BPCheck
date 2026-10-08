@@ -233,6 +233,12 @@ class BPCHECKCORE_API FRedundantBranchRule : public FAnalysisRule
 public:
 	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
 };
+
+class BPCHECKCORE_API FUnusedVariableRule : public FAnalysisRule
+{
+public:
+	void Check(const UBlueprint* Blueprint, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
 #pragma endregion
 
 struct FNextExecNode
