@@ -343,7 +343,7 @@ void FRedundantBranchRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCon
 				return Item.PinIndex == 1;
 			});
 
-		if (True && False && (True->Node == False->Node))
+		if (True && False && (True->Node == False->Node) || !Branch->GetConditionPin()->HasAnyConnections())
 		{
 			Suggestions.Push(FSuggestionContext(ESuggestion::RedundantBranch, Node->NodeGuid));
 		}
