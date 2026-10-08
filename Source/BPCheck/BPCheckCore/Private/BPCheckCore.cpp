@@ -165,6 +165,11 @@ void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Sugg
 				Suggestions.Push(FSuggestionContext(ESuggestion::CastWithoutFailHandler, DynamicCast->NodeGuid));
 			}
 		}
+
+		if (Context.HasFlag(DynamicCast->NodeGuid, ENodeFlag::InALoop))
+		{
+			Suggestions.Push(FSuggestionContext(ESuggestion::CastInLoop, DynamicCast->NodeGuid));
+		}
 	}
 }
 

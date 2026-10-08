@@ -18,7 +18,8 @@ enum class ESuggestion : uint8
 	GraphSize				UMETA(DisplayName = "Graph Size"),
 	FunctionArgsCount		UMETA(DisplayName = "Function Arguments Count"),
 	UnusedTick				UMETA(DisplayName = "Unused Tick"),
-	EmptyEventHandler		UMETA(DisplayName = "Empty Event Handler")
+	EmptyEventHandler		UMETA(DisplayName = "Empty Event Handler"),
+	CastInLoop				UMETA(DisplayName = "Cast In Loop")
 };
 
 struct FSuggestionInfo
@@ -41,7 +42,8 @@ inline const FSuggestionInfo& GetSuggestionInfo(ESuggestion S)
 		{ ESuggestion::GraphSize, {"BP008", TEXT("'{Blueprint}:{Graph}' exceeded the allowed limit of nodes.")}},
 		{ ESuggestion::FunctionArgsCount, {"BP009", TEXT("Function '{Graph}' exceeded the allowed limit of arguments.")}},
 		{ ESuggestion::UnusedTick, {"BP010", TEXT("Unused Tick introduces slight unnecessary overhead, delete it.")}},
-		{ ESuggestion::EmptyEventHandler, {"BP011", TEXT("Empty '{Node}' introduces slight unnecessary overhead, delete it.")}}
+		{ ESuggestion::EmptyEventHandler, {"BP011", TEXT("Empty '{Node}' introduces slight unnecessary overhead, delete it.")}},
+		{ ESuggestion::CastInLoop, {"BP010", TEXT("'{Node}' in loop body casts on every iteration. If the input does not change per iteration, cast once before the loop and reuse the result.")} },
 	};
 
 	return Data[S];
