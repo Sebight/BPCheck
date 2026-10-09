@@ -1,6 +1,6 @@
 <h1 align="center">
     <div align="center">
-        <img width="600" alt="bpcheck_logo" src="https://github.com/user-attachments/assets/a7aa43ad-dd7c-4499-8dbb-53bf63b6e32c" />
+        <img width="450" alt="bpcheck_logo" src="https://github.com/user-attachments/assets/a7aa43ad-dd7c-4499-8dbb-53bf63b6e32c" />
     </div>
 </h1>
 
