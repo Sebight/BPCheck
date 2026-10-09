@@ -5,6 +5,7 @@
 #include "K2Node_CallFunction.h"
 #include "K2Node_DynamicCast.h"
 #include "K2Node_FunctionEntry.h"
+#include "K2Node_IfThenElse.h"
 #include "K2Node_MacroInstance.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -165,6 +166,11 @@ void FCastRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Sugg
 				Suggestions.Push(FSuggestionContext(ESuggestion::CastWithoutFailHandler, DynamicCast->NodeGuid));
 			}
 		}
+
+		if (Context.HasFlag(DynamicCast->NodeGuid, ENodeFlag::InALoop))
+		{
+			Suggestions.Push(FSuggestionContext(ESuggestion::CastInLoop, DynamicCast->NodeGuid));
+		}
 	}
 }
 
@@ -270,6 +276,97 @@ void FFunctionArgumentRule::Check(const UEdGraph* Graph, TArray<FSuggestionConte
 	if (Count > Context.Settings->MaxFunctionArguments)
 	{
 		Suggestions.Push(FSuggestionContext(ESuggestion::FunctionArgsCount, Graph));
+	}
+}
+
+void FEmptyEventHandlerRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	if (const UK2Node_Event* Event = Cast<UK2Node_Event>(Node))
+	{
+		bool ConnectedToAnything = false;
+		for (auto* Pin : Event->Pins)
+		{
+			if (Pin->Direction == EGPD_Output)
+			{
+				if (Pin->HasAnyConnections())
+				{
+					ConnectedToAnything = true;
+					break;
+				}
+			}
+		}
+
+		if (Event->GetFunctionName() == "ReceiveTick" && !ConnectedToAnything)
+		{
+			Suggestions.Push(FSuggestionContext(ESuggestion::UnusedTick, Event->NodeGuid));
+		}
+		else if (!ConnectedToAnything)
+		{
+			Suggestions.Push(FSuggestionContext(ESuggestion::EmptyEventHandler, Event->NodeGuid));
+		}
+	}
+}
+
+void FLoopNestingRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	bool bIsLoop = false;
+	if (const UK2Node_MacroInstance* MacroInstance = Cast<UK2Node_MacroInstance>(Node))
+	{
+		FString Name = MacroInstance->GetMacroGraph()->GetName();
+		if (Name.Equals("ForLoop") || Name.Equals("ForEachLoop") || Name.Equals("WhileLoop"))
+		{
+			bIsLoop = true;
+		}
+	}
+
+	if (!bIsLoop) return;
+
+	if (Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop))
+	{
+		Suggestions.Push(FSuggestionContext(ESuggestion::NestedLoops, Node->NodeGuid));
+	}
+}
+
+void FRedundantBranchRule::Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	if (const UK2Node_IfThenElse* Branch = Cast<UK2Node_IfThenElse>(Node))
+	{
+		TArray<FNextExecNode> Outputs = FAnalyzer::GetNextExecNode(Node);
+
+		FNextExecNode* True = Outputs.FindByPredicate([&](const FNextExecNode& Item)
+			{
+				return Item.PinIndex == 0;
+			});
+
+		FNextExecNode* False = Outputs.FindByPredicate([&](const FNextExecNode& Item)
+			{
+				return Item.PinIndex == 1;
+			});
+
+		if (True && False && (True->Node == False->Node) || !Branch->GetConditionPin()->HasAnyConnections())
+		{
+			Suggestions.Push(FSuggestionContext(ESuggestion::RedundantBranch, Node->NodeGuid));
+		}
+	}
+}
+
+void FUnusedVariableRule::Check(const UBlueprint* Blueprint, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context)
+{
+	TArray<FString> UnusedVars;
+	for (const auto& Var : Blueprint->NewVariables)
+	{
+		if (!FBlueprintEditorUtils::IsVariableUsed(Blueprint, Var.VarName))
+		{
+			UnusedVars.Push(Var.VarName.ToString());
+		}
+	}
+
+	for (const auto& Var : UnusedVars)
+	{
+		FSuggestionContext Ctx = FSuggestionContext(ESuggestion::UnusedVariable, ESuggestionScope::Blueprint);
+		Ctx.Subject = Var;
+
+		Suggestions.Push(Ctx);
 	}
 }
 
@@ -402,6 +499,10 @@ FAnalyzer::FAnalyzer()
 	Rules.Push(MakeUnique<FLatentNodeInLoopRule>());
 	Rules.Push(MakeUnique<FGraphNodeCountRule>());
 	Rules.Push(MakeUnique<FFunctionArgumentRule>());
+	Rules.Push(MakeUnique<FEmptyEventHandlerRule>());
+	Rules.Push(MakeUnique<FLoopNestingRule>());
+	Rules.Push(MakeUnique<FRedundantBranchRule>());
+	Rules.Push(MakeUnique<FUnusedVariableRule>());
 }
 
 FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
@@ -419,6 +520,13 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 
 	TArray<FSuggestionContext> Suggestions;
 
+	// Blueprint scope
+	for (const auto& Rule : Rules)
+	{
+		Rule->Check(Blueprint, Suggestions, Context);
+	}
+
+	// Graph scope
 	TArray<UEdGraph*> Graphs;
 	Blueprint->GetAllGraphs(Graphs);
 	for (auto& Graph : Graphs)
@@ -429,6 +537,7 @@ FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 		}
 	}
 
+	// Nodes scope
 	for (auto& Page : Blueprint->UbergraphPages)
 	{
 		for (auto Node : Page->Nodes)

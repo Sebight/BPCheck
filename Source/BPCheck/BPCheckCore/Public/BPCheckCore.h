@@ -57,6 +57,7 @@ struct FSuggestionContext
 	ESuggestionScope Scope = ESuggestionScope::None;
 	FGuid NodeGuid;
 	TWeakObjectPtr<const UEdGraph> Graph;
+	FString Subject;
 };
 
 USTRUCT()
@@ -214,6 +215,30 @@ class BPCHECKCORE_API FFunctionArgumentRule : public FAnalysisRule
 {
 public:
 	void Check(const UEdGraph* Graph, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FEmptyEventHandlerRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FLoopNestingRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FRedundantBranchRule : public FAnalysisRule
+{
+public:
+	void Check(const UEdGraphNode* Node, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
+};
+
+class BPCHECKCORE_API FUnusedVariableRule : public FAnalysisRule
+{
+public:
+	void Check(const UBlueprint* Blueprint, TArray<FSuggestionContext>& Suggestions, const FAnalysisContext& Context) override;
 };
 #pragma endregion
 

@@ -336,6 +336,7 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 			}
 
 			Args.Add(TEXT("Blueprint"), FStringFormatArg(BP->GetName()));
+			Args.Add(TEXT("Variable"), FStringFormatArg(S.Subject));
 			// TODO(Seb): These, but maybe with a different approach?
 			// Args.Add(TEXT("Value"), FStringFormatArg(S.Value));
 			// Args.Add(TEXT("Limit"), FStringFormatArg(S.Limit));
@@ -389,6 +390,8 @@ void FBPCheckEditorModule::ApplyNodeMarkers()
 				const FSuggestionInfo& Info = GetSuggestionInfo(Suggestion.Suggestion);
 				FStringFormatNamedArguments Args;
 				Args.Add(TEXT("Node"), FStringFormatArg(Node->GetNodeTitle(ENodeTitleType::ListView).ToString()));
+				Args.Add(TEXT("Variable"), FStringFormatArg(Suggestion.Subject));
+
 				const FString Desc = FString::Format(*Info.SuggestionDescription, Args);
 
 				Node->bHasCompilerMessage = true;
@@ -587,6 +590,21 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 			FStringFormatNamedArguments Args;
 			Args.Add(TEXT("Graph"), FStringFormatArg(Suggestion.Graph->GetName()));
 			Args.Add(TEXT("Blueprint"), FStringFormatArg(CompilationContext.Blueprint->GetName()));
+
+			FString Description = FString::Format(*Info.SuggestionDescription, Args);
+
+			Msg->AddToken(FTextToken::Create(FText::FromString(Description)));
+
+			FMessageLog("BPCheck").AddMessage(Msg);
+		}
+		else if (Suggestion.Scope == ESuggestionScope::Blueprint)
+		{
+			TSharedRef<FTokenizedMessage> Msg = FTokenizedMessage::Create(EMessageSeverity::Warning);
+			Msg->AddToken(FTextToken::Create(FText::FromString(Info.SuggestionCode)));
+
+			FStringFormatNamedArguments Args;
+			Args.Add(TEXT("Blueprint"), FStringFormatArg(CompilationContext.Blueprint->GetName()));
+			Args.Add(TEXT("Variable"), FStringFormatArg(Suggestion.Subject));
 
 			FString Description = FString::Format(*Info.SuggestionDescription, Args);
 
