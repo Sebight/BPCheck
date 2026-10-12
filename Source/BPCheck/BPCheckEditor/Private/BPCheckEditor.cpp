@@ -53,6 +53,21 @@ UEdGraphNode* BPCheck::Editor::ResolveNode(const UBlueprint* Blueprint, FGuid No
 	return nullptr;
 }
 
+UEdGraph* BPCheck::Editor::ResolveGraph(const UBlueprint* Blueprint, FGuid GraphGuid)
+{
+	if (!Blueprint || !GraphGuid.IsValid()) return nullptr;
+
+	TArray<UEdGraph*> Graphs;
+	Blueprint->GetAllGraphs(Graphs);
+
+	UEdGraph* const* Found = Graphs.FindByPredicate([&GraphGuid](const UEdGraph* G)
+		{
+			return G && G->GraphGuid == GraphGuid;
+		});
+
+	return Found ? *Found : nullptr;
+}
+
 void FBPCheckEditorModule::StartupModule()
 {
 	UE_LOG(LogBPCheckEditor, Log, TEXT("BPCheck-Editor started."));
@@ -301,7 +316,17 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 		int32 Count = 0;
 		for (const FSuggestionContext& S : Pair.Value)
 		{
-			if (!Settings->IsSuggestionEnabled(S.Suggestion) || Settings->IsSuppressed(BP, { S.NodeGuid }, S.Suggestion))
+			if (!Settings->IsSuggestionEnabled(S.Suggestion))
+			{
+				continue;
+			}
+
+			if (S.Scope == ESuggestionScope::Node && Settings->IsSuppressed(BP, { S.NodeGuid }, S.Suggestion))
+			{
+				continue;
+			}
+
+			if (S.Scope == ESuggestionScope::Graph && Settings->IsSuppressed(BP, { S.Graph->GraphGuid }, S.Suggestion))
 			{
 				continue;
 			}
@@ -349,6 +374,10 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 			Leaf->Blueprint = BP;
 			Leaf->Suggestion = S.Suggestion;
 			Leaf->NodeGuid = S.NodeGuid;
+			if (S.Graph.IsValid())
+			{
+				Leaf->GraphGuid = S.Graph->GraphGuid;
+			}
 			Leaf->Scope = S.Scope;
 
 			Parent->Children.Add(Leaf);
@@ -557,6 +586,14 @@ TSharedPtr<SWidget> SBPCheckSuggestionsPanel::OnContextMenuOpening()
 				FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
 					{
 						Settings->Suppress(Item->Blueprint.Get(), { Item->NodeGuid }, Item->Suggestion);
+					})));
+		}
+		else if (Item->Scope == ESuggestionScope::Graph)
+		{
+			Menu.AddMenuEntry(INVTEXT("Silence for this graph"), INVTEXT("Silence suggestion for this graph"),
+				FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+					{
+						Settings->Suppress(Item->Blueprint.Get(), { Item->GraphGuid }, Item->Suggestion);
 					})));
 		}
 
@@ -789,12 +826,17 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 		{
 			if (const UBlueprint* BP = Cast<UBlueprint>(S.Blueprint.ResolveObject()))
 			{
-				if (const UEdGraphNode* N = BPCheck::Editor::ResolveNode(BP, S.NodeGuid.GetValue()))
+				if (const UEdGraphNode* N = BPCheck::Editor::ResolveNode(BP, S.TargetGuid.GetValue()))
 				{
 					return N->GetNodeTitle(ENodeTitleType::ListView);
 				}
+
+				if (const UEdGraph* G = BPCheck::Editor::ResolveGraph(BP, S.TargetGuid.GetValue()))
+				{
+					return FText::FromString(G->GetName());
+				}
 			}
-			return FText::FromString(S.NodeGuid.GetValue().ToString().Left(8));
+			return FText::FromString(S.TargetGuid.GetValue().ToString().Left(8));
 		};
 
 	auto GetRuleName = [](ESuggestion Suggestion) -> FString
@@ -935,7 +977,7 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 		TArray<const FSuppression*> BlueprintWide, Nodes;
 		for (const FSuppression& S : Pair.Value)
 		{
-			(S.NodeGuid.IsSet() ? Nodes : BlueprintWide).Add(&S);
+			(S.TargetGuid.IsSet() ? Nodes : BlueprintWide).Add(&S);
 		}
 
 		IDetailGroup& Group = SupCat.AddGroup(

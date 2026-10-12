@@ -17,6 +17,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogBPCheckEditor, Log, All);
 namespace BPCheck::Editor
 {
 	UEdGraphNode* ResolveNode(const UBlueprint* Blueprint, FGuid NodeGuid);
+	UEdGraph* ResolveGraph(const UBlueprint* Blueprint, FGuid GraphGuid);
 }
 
 class SBPCheckSuggestionsPanel;
@@ -62,6 +63,7 @@ struct FResultTreeItem
 
 	TWeakObjectPtr<const UBlueprint> Blueprint;
 	FGuid NodeGuid;
+	FGuid GraphGuid;
 	ESuggestion Suggestion;
 	ESuggestionScope Scope;
 };
