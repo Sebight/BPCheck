@@ -331,6 +331,11 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 				continue;
 			}
 
+			if (S.Scope == ESuggestionScope::Blueprint && Settings->IsSuppressed(BP, {}, S.Suggestion))
+			{
+				continue;
+			}
+
 			const FSuggestionInfo& Info = GetSuggestionInfo(S.Suggestion);
 			TSharedPtr<FResultTreeItem> Leaf = MakeShared<FResultTreeItem>();
 			TSharedPtr<FResultTreeItem> Parent = Group;
@@ -570,6 +575,8 @@ TSharedPtr<SWidget> SBPCheckSuggestionsPanel::OnContextMenuOpening()
 	if (Selected.Num() == 0) return nullptr;
 
 	const bool bAllLeaves = Algo::AllOf(Selected, [](const TSharedPtr<FResultTreeItem>& I) { return !I->bIsGroup; });
+
+	if (!bAllLeaves) return nullptr;
 
 	FMenuBuilder Menu(true, nullptr);
 	Menu.BeginSection("BPCheckActions", INVTEXT("BPCheck"));
