@@ -17,15 +17,6 @@ public:
 	virtual void ShutdownModule() override;
 };
 
-UENUM()
-enum class ESuggestionScope : uint8
-{
-	None		UMETA(DisplayName = "None"),
-	Node		UMETA(DisplayName = "Node"),
-	Graph		UMETA(DisplayName = "Graph"),
-	Blueprint	UMETA(DisplayName = "Blueprint")
-};
-
 USTRUCT()
 struct FSuggestionContext
 {
@@ -66,18 +57,19 @@ struct FSuppression
 	GENERATED_BODY()
 
 	UPROPERTY() FSoftObjectPath Blueprint;
-	UPROPERTY() TOptional<FGuid> NodeGuid;
+	// This can now also hold Guid of a Graph, so that's why the rename
+	UPROPERTY() TOptional<FGuid> TargetGuid;
 	UPROPERTY() ESuggestion Suggestion = ESuggestion::None;
 
 	bool operator==(const FSuppression& Other) const
 	{
-		return Suggestion == Other.Suggestion && Blueprint == Other.Blueprint && ((NodeGuid.IsSet() && Other.NodeGuid.IsSet()) ? NodeGuid.GetValue() == Other.NodeGuid.GetValue() : true);
+		return Suggestion == Other.Suggestion && Blueprint == Other.Blueprint && ((TargetGuid.IsSet() && Other.TargetGuid.IsSet()) ? TargetGuid.GetValue() == Other.TargetGuid.GetValue() : true);
 	}
 };
 
 FORCEINLINE uint32 GetTypeHash(const FSuppression& S)
 {
-	return HashCombine(HashCombine(GetTypeHash(S.Blueprint), GetTypeHash(S.NodeGuid)), GetTypeHash(S.Suggestion));
+	return HashCombine(HashCombine(GetTypeHash(S.Blueprint), GetTypeHash(S.TargetGuid)), GetTypeHash(S.Suggestion));
 }
 
 UCLASS(config = BPCheck, defaultconfig, meta = (DisplayName = "BPCheck"))
