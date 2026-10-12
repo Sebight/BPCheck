@@ -26,6 +26,7 @@
 #include "Styling/SlateIconFinder.h"
 
 #include "Suggestions.generated.h"
+#include "Algo/AllOf.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
@@ -345,6 +346,11 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 			Leaf->Description = FString::Format(*Info.SuggestionDescription, Args);
 			Leaf->Severity = EItemSeverity::Warning;
 
+			Leaf->Blueprint = BP;
+			Leaf->Suggestion = S.Suggestion;
+			Leaf->NodeGuid = S.NodeGuid;
+			Leaf->Scope = S.Scope;
+
 			Parent->Children.Add(Leaf);
 			++Count;
 		}
@@ -490,6 +496,7 @@ void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
 				.OnGetChildren(this, &SBPCheckSuggestionsPanel::OnGetChildren)
 				.SelectionMode(ESelectionMode::Single)
 				.OnMouseButtonDoubleClick(this, &SBPCheckSuggestionsPanel::OnItemDoubleClicked)
+				.OnContextMenuOpening(this, &SBPCheckSuggestionsPanel::OnContextMenuOpening)
 				.HeaderRow(
 					SNew(SHeaderRow)
 					+ SHeaderRow::Column(ColumnIds::Severity)
@@ -526,6 +533,50 @@ void SBPCheckSuggestionsPanel::OnGetChildren(TSharedPtr<FResultTreeItem> Node, T
 	{
 		OutChildren = Node->Children;
 	}
+}
+
+TSharedPtr<SWidget> SBPCheckSuggestionsPanel::OnContextMenuOpening()
+{
+	auto Selected = TreeView->GetSelectedItems();
+	if (Selected.Num() == 0) return nullptr;
+
+	const bool bAllLeaves = Algo::AllOf(Selected, [](const TSharedPtr<FResultTreeItem>& I) { return !I->bIsGroup; });
+
+	FMenuBuilder Menu(true, nullptr);
+	Menu.BeginSection("BPCheckActions", INVTEXT("BPCheck"));
+
+	UBPCheckSettings* Settings = GetMutableDefault<UBPCheckSettings>();
+
+	if (Selected.Num() == 1)
+	{
+		TSharedPtr<FResultTreeItem> Item = Selected[0];
+
+		if (Item->Scope == ESuggestionScope::Node)
+		{
+			Menu.AddMenuEntry(INVTEXT("Silence for this node"), INVTEXT("Silence suggestion for this node"),
+				FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+					{
+						Settings->Suppress(Item->Blueprint.Get(), { Item->NodeGuid }, Item->Suggestion);
+					})));
+		}
+
+		Menu.AddMenuEntry(INVTEXT("Silence for this Blueprint"), INVTEXT("Silence suggestion for this Blueprint"),
+			FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+				{
+					Settings->Suppress(Item->Blueprint.Get(), {}, Item->Suggestion);
+				})));
+
+		Menu.AddMenuEntry(INVTEXT("Silence globally"), INVTEXT("Silence suggestion for project"),
+			FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+				{
+					Settings->DisableSuggestion(Item->Suggestion);
+				})));
+	}
+
+	Menu.EndSection();
+
+	return Menu.MakeWidget();
+
 }
 
 void SBPCheckSuggestionsPanel::OnItemDoubleClicked(TSharedPtr<FResultTreeItem> Item)
