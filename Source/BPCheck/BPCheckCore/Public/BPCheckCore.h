@@ -49,6 +49,7 @@ struct FSuggestionContext
 	FGuid NodeGuid;
 	TWeakObjectPtr<const UEdGraph> Graph;
 	FString Subject;
+	TArray<FString> StackTrace;
 };
 
 USTRUCT()
@@ -154,8 +155,8 @@ class FEffectResolver
 {
 public:
 	FFunctionSummary EffectsOf(UFunction* Fn);
-
 	void ClearCache();
+
 private:
 	TMap<UFunction*, FFunctionSummary> KnownEffects;
 	TMap<UFunction*, FFunctionSummary> EffectsCache;

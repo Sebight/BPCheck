@@ -144,17 +144,16 @@ void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 
 		if (InHotPath && Summary.Effects.Contains(EFunctionEffect::DebugSideEffect))
 		{
-			Suggestions.Push(FSuggestionContext(ESuggestion::PrintInHotPath, Call->NodeGuid));
+			FSuggestionContext Ctx = FSuggestionContext(ESuggestion::PrintInHotPath, Call->NodeGuid);
+			Ctx.StackTrace = Summary.StackTrace.FindRef(EFunctionEffect::DebugSideEffect);
+			Suggestions.Push(Ctx);
 		}
 
 		if (InHotPath && Summary.Effects.Contains(EFunctionEffect::ExpensiveActorQuery))
 		{
-			TArray<FString> StackTrace;
-			StackTrace.Add(TargetFn->GetName());
-			StackTrace.Append(Summary.StackTrace.FindRef(EFunctionEffect::ExpensiveActorQuery));
-			UE_LOG(LogBPCheckCore, Warning, TEXT("%s"), *FString::Join(StackTrace, TEXT(" > ")));
-
-			Suggestions.Push(FSuggestionContext(ESuggestion::HotGetActorsOfClass, Call->NodeGuid));
+			FSuggestionContext Ctx = FSuggestionContext(ESuggestion::HotGetActorsOfClass, Call->NodeGuid);
+			Ctx.StackTrace = Summary.StackTrace.FindRef(EFunctionEffect::ExpensiveActorQuery);
+			Suggestions.Push(Ctx);
 		}
 	}
 }
@@ -241,7 +240,10 @@ void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 
 		if (Summary.Effects.Contains(EFunctionEffect::Latent))
 		{
-			Suggestions.Push(FSuggestionContext(ESuggestion::LatentNodeInLoop, Call->NodeGuid));
+			FSuggestionContext Ctx = FSuggestionContext(ESuggestion::HotGetActorsOfClass, Call->NodeGuid);
+			Ctx.StackTrace = Summary.StackTrace.FindRef(EFunctionEffect::Latent);
+
+			Suggestions.Push(Ctx);
 		}
 	}
 }

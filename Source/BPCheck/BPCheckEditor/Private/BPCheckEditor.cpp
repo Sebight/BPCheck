@@ -437,6 +437,13 @@ void FBPCheckEditorModule::ApplyNodeMarkers()
 				Node->bHasCompilerMessage = true;
 				Node->ErrorType = static_cast<int32>(EMessageSeverity::Info);
 				Node->ErrorMsg = FString::Printf(TEXT("BPCheck: %s\n%s"), *Info.SuggestionCode, *Desc);
+
+				if (!Suggestion.StackTrace.IsEmpty())
+				{
+					Node->ErrorMsg += "\n";
+					Node->ErrorMsg += FString::Join(Suggestion.StackTrace, TEXT(" > "));
+				}
+
 				Dirtied.Add(Node->GetGraph());
 			}
 			else if (Node->ErrorMsg.StartsWith(TEXT("BPCheck:")))
@@ -738,6 +745,11 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 			Node->bHasCompilerMessage = true;
 			Node->ErrorType = static_cast<int32>(EMessageSeverity::Info);
 			Node->ErrorMsg = FString::Printf(TEXT("BPCheck: %s\n%s"), *Info.SuggestionCode, *Description);
+			if (!Suggestion.StackTrace.IsEmpty())
+			{
+				Node->ErrorMsg += "\n";
+				Node->ErrorMsg += FString::Join(Suggestion.StackTrace, TEXT(" > "));
+			}
 
 			FMessageLog("BPCheck").AddMessage(Msg);
 		}
