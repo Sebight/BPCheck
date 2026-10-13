@@ -440,8 +440,8 @@ void FBPCheckEditorModule::ApplyNodeMarkers()
 
 				if (!Suggestion.StackTrace.IsEmpty())
 				{
-					Node->ErrorMsg += "\n";
-					Node->ErrorMsg += FString::Join(Suggestion.StackTrace, TEXT(" > "));
+					Node->ErrorMsg += "\n\n";
+					Node->ErrorMsg += TEXT("Stack Trace: ") + FString::Join(Suggestion.StackTrace, TEXT(" > "));
 				}
 
 				Dirtied.Add(Node->GetGraph());
@@ -747,8 +747,8 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 			Node->ErrorMsg = FString::Printf(TEXT("BPCheck: %s\n%s"), *Info.SuggestionCode, *Description);
 			if (!Suggestion.StackTrace.IsEmpty())
 			{
-				Node->ErrorMsg += "\n";
-				Node->ErrorMsg += FString::Join(Suggestion.StackTrace, TEXT(" > "));
+				Node->ErrorMsg += "\n\n";
+				Node->ErrorMsg += TEXT("Stack Trace: ") + FString::Join(Suggestion.StackTrace, TEXT(" > "));
 			}
 
 			FMessageLog("BPCheck").AddMessage(Msg);
