@@ -17,6 +17,7 @@ DECLARE_LOG_CATEGORY_EXTERN(LogBPCheckEditor, Log, All);
 namespace BPCheck::Editor
 {
 	UEdGraphNode* ResolveNode(const UBlueprint* Blueprint, FGuid NodeGuid);
+	UEdGraph* ResolveGraph(const UBlueprint* Blueprint, FGuid GraphGuid);
 }
 
 class SBPCheckSuggestionsPanel;
@@ -41,6 +42,7 @@ private:
 
 	TArray<FSuggestionContext> GetSuggestionsForNode(FGuid NodeGuid);
 
+	TSharedPtr<STreeView<TSharedPtr<FResultTreeItem>>> TreeView;
 	TWeakPtr<SBPCheckSuggestionsPanel> SuggestionsPanel;
 	TMap<const UBlueprint*, TArray<FSuggestionContext>> Suggestions;
 	FDelegateHandle SettingsChangedHandle;
@@ -58,6 +60,12 @@ struct FResultTreeItem
 	TWeakObjectPtr<const UObject> Target;
 	TArray<TSharedPtr<FResultTreeItem>> Children;
 	const FSlateBrush* Icon = nullptr;
+
+	TWeakObjectPtr<const UBlueprint> Blueprint;
+	FGuid NodeGuid;
+	FGuid GraphGuid;
+	ESuggestion Suggestion;
+	ESuggestionScope Scope;
 };
 
 class SBPCheckSuggestionsPanel : public SCompoundWidget
@@ -73,6 +81,7 @@ public:
 private:
 	TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FResultTreeItem> Node, const TSharedRef<STableViewBase>& Owner);
 	void OnGetChildren(TSharedPtr<FResultTreeItem> Node, TArray<TSharedPtr<FResultTreeItem>>& OutChildren);
+	TSharedPtr<SWidget> OnContextMenuOpening();
 
 	TArray<TSharedPtr<FResultTreeItem>> RootNodes;
 	TSharedPtr<STreeView<TSharedPtr<FResultTreeItem>>> TreeView;

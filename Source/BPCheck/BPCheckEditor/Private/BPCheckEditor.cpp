@@ -26,6 +26,7 @@
 #include "Styling/SlateIconFinder.h"
 
 #include "Suggestions.generated.h"
+#include "Algo/AllOf.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 
 #define LOCTEXT_NAMESPACE "FBPCheckModule"
@@ -50,6 +51,21 @@ UEdGraphNode* BPCheck::Editor::ResolveNode(const UBlueprint* Blueprint, FGuid No
 	}
 
 	return nullptr;
+}
+
+UEdGraph* BPCheck::Editor::ResolveGraph(const UBlueprint* Blueprint, FGuid GraphGuid)
+{
+	if (!Blueprint || !GraphGuid.IsValid()) return nullptr;
+
+	TArray<UEdGraph*> Graphs;
+	Blueprint->GetAllGraphs(Graphs);
+
+	UEdGraph* const* Found = Graphs.FindByPredicate([&GraphGuid](const UEdGraph* G)
+		{
+			return G && G->GraphGuid == GraphGuid;
+		});
+
+	return Found ? *Found : nullptr;
 }
 
 void FBPCheckEditorModule::StartupModule()
@@ -300,7 +316,22 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 		int32 Count = 0;
 		for (const FSuggestionContext& S : Pair.Value)
 		{
-			if (!Settings->IsSuggestionEnabled(S.Suggestion) || Settings->IsSuppressed(BP, { S.NodeGuid }, S.Suggestion))
+			if (!Settings->IsSuggestionEnabled(S.Suggestion))
+			{
+				continue;
+			}
+
+			if (S.Scope == ESuggestionScope::Node && Settings->IsSuppressed(BP, { S.NodeGuid }, S.Suggestion))
+			{
+				continue;
+			}
+
+			if (S.Scope == ESuggestionScope::Graph && Settings->IsSuppressed(BP, { S.Graph->GraphGuid }, S.Suggestion))
+			{
+				continue;
+			}
+
+			if (S.Scope == ESuggestionScope::Blueprint && Settings->IsSuppressed(BP, {}, S.Suggestion))
 			{
 				continue;
 			}
@@ -344,6 +375,15 @@ TArray<TSharedPtr<FResultTreeItem>> FBPCheckEditorModule::BuildTree() const
 			Leaf->Label = Info.SuggestionCode;
 			Leaf->Description = FString::Format(*Info.SuggestionDescription, Args);
 			Leaf->Severity = EItemSeverity::Warning;
+
+			Leaf->Blueprint = BP;
+			Leaf->Suggestion = S.Suggestion;
+			Leaf->NodeGuid = S.NodeGuid;
+			if (S.Graph.IsValid())
+			{
+				Leaf->GraphGuid = S.Graph->GraphGuid;
+			}
+			Leaf->Scope = S.Scope;
 
 			Parent->Children.Add(Leaf);
 			++Count;
@@ -490,6 +530,7 @@ void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
 				.OnGetChildren(this, &SBPCheckSuggestionsPanel::OnGetChildren)
 				.SelectionMode(ESelectionMode::Single)
 				.OnMouseButtonDoubleClick(this, &SBPCheckSuggestionsPanel::OnItemDoubleClicked)
+				.OnContextMenuOpening(this, &SBPCheckSuggestionsPanel::OnContextMenuOpening)
 				.HeaderRow(
 					SNew(SHeaderRow)
 					+ SHeaderRow::Column(ColumnIds::Severity)
@@ -526,6 +567,60 @@ void SBPCheckSuggestionsPanel::OnGetChildren(TSharedPtr<FResultTreeItem> Node, T
 	{
 		OutChildren = Node->Children;
 	}
+}
+
+TSharedPtr<SWidget> SBPCheckSuggestionsPanel::OnContextMenuOpening()
+{
+	auto Selected = TreeView->GetSelectedItems();
+	if (Selected.Num() == 0) return nullptr;
+
+	const bool bAllLeaves = Algo::AllOf(Selected, [](const TSharedPtr<FResultTreeItem>& I) { return !I->bIsGroup; });
+
+	if (!bAllLeaves) return nullptr;
+
+	FMenuBuilder Menu(true, nullptr);
+	Menu.BeginSection("BPCheckActions", INVTEXT("BPCheck"));
+
+	UBPCheckSettings* Settings = GetMutableDefault<UBPCheckSettings>();
+
+	if (Selected.Num() == 1)
+	{
+		TSharedPtr<FResultTreeItem> Item = Selected[0];
+
+		if (Item->Scope == ESuggestionScope::Node)
+		{
+			Menu.AddMenuEntry(INVTEXT("Silence for this node"), INVTEXT("Silence suggestion for this node"),
+				FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+					{
+						Settings->Suppress(Item->Blueprint.Get(), { Item->NodeGuid }, Item->Suggestion);
+					})));
+		}
+		else if (Item->Scope == ESuggestionScope::Graph)
+		{
+			Menu.AddMenuEntry(INVTEXT("Silence for this graph"), INVTEXT("Silence suggestion for this graph"),
+				FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+					{
+						Settings->Suppress(Item->Blueprint.Get(), { Item->GraphGuid }, Item->Suggestion);
+					})));
+		}
+
+		Menu.AddMenuEntry(INVTEXT("Silence for this Blueprint"), INVTEXT("Silence suggestion for this Blueprint"),
+			FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+				{
+					Settings->Suppress(Item->Blueprint.Get(), {}, Item->Suggestion);
+				})));
+
+		Menu.AddMenuEntry(INVTEXT("Silence globally"), INVTEXT("Silence suggestion for project"),
+			FSlateIcon(), FUIAction(FExecuteAction::CreateLambda([=]()
+				{
+					Settings->DisableSuggestion(Item->Suggestion);
+				})));
+	}
+
+	Menu.EndSection();
+
+	return Menu.MakeWidget();
+
 }
 
 void SBPCheckSuggestionsPanel::OnItemDoubleClicked(TSharedPtr<FResultTreeItem> Item)
@@ -738,12 +833,17 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 		{
 			if (const UBlueprint* BP = Cast<UBlueprint>(S.Blueprint.ResolveObject()))
 			{
-				if (const UEdGraphNode* N = BPCheck::Editor::ResolveNode(BP, S.NodeGuid.GetValue()))
+				if (const UEdGraphNode* N = BPCheck::Editor::ResolveNode(BP, S.TargetGuid.GetValue()))
 				{
 					return N->GetNodeTitle(ENodeTitleType::ListView);
 				}
+
+				if (const UEdGraph* G = BPCheck::Editor::ResolveGraph(BP, S.TargetGuid.GetValue()))
+				{
+					return FText::FromString(G->GetName());
+				}
 			}
-			return FText::FromString(S.NodeGuid.GetValue().ToString().Left(8));
+			return FText::FromString(S.TargetGuid.GetValue().ToString().Left(8));
 		};
 
 	auto GetRuleName = [](ESuggestion Suggestion) -> FString
@@ -884,7 +984,7 @@ void FBPCheckSettingsCustomization::CustomizeDetails(IDetailLayoutBuilder& B)
 		TArray<const FSuppression*> BlueprintWide, Nodes;
 		for (const FSuppression& S : Pair.Value)
 		{
-			(S.NodeGuid.IsSet() ? Nodes : BlueprintWide).Add(&S);
+			(S.TargetGuid.IsSet() ? Nodes : BlueprintWide).Add(&S);
 		}
 
 		IDetailGroup& Group = SupCat.AddGroup(

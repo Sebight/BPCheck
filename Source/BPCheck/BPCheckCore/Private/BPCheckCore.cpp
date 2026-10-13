@@ -34,9 +34,12 @@ void UBPCheckSettings::PruneDeadNodes(UBlueprint* Blueprint, const TArray<FGuid>
 {
 	for (auto It = Suppressions.CreateIterator(); It; ++It)
 	{
+		const FSuggestionInfo& Info = GetSuggestionInfo(It->Suggestion);
+		if (Info.Scope != ESuggestionScope::Node) continue;
+
 		if (It->Blueprint == FSoftObjectPath(Blueprint))
 		{
-			if (It->NodeGuid.IsSet() && !AliveNodes.Contains(It->NodeGuid))
+			if (It->TargetGuid.IsSet() && !AliveNodes.Contains(It->TargetGuid))
 			{
 				It.RemoveCurrent();
 			}
