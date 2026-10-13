@@ -127,7 +127,7 @@ bool FAnalysisContext::IsDead(FGuid NodeGuid) const
 	return !AliveNodes.Contains(NodeGuid);
 }
 
-TSet<EFunctionEffect> FAnalysisContext::EffectsOf(UFunction* Fn) const
+FFunctionSummary FAnalysisContext::EffectsOf(UFunction* Fn) const
 {
 	return EffectResolver->EffectsOf(Fn);
 }
@@ -139,13 +139,21 @@ void FExpensiveHotNodeRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 		bool InHotPath = Context.HasFlag(Node->NodeGuid, ENodeFlag::InTick) || Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop);
 
 		UFunction* TargetFn = Call->GetTargetFunction();
-		if (InHotPath && Context.EffectsOf(TargetFn).Contains(EFunctionEffect::DebugSideEffect))
+
+		FFunctionSummary Summary = Context.EffectsOf(TargetFn);
+
+		if (InHotPath && Summary.Effects.Contains(EFunctionEffect::DebugSideEffect))
 		{
 			Suggestions.Push(FSuggestionContext(ESuggestion::PrintInHotPath, Call->NodeGuid));
 		}
 
-		if (InHotPath && Context.EffectsOf(TargetFn).Contains(EFunctionEffect::ExpensiveActorQuery))
+		if (InHotPath && Summary.Effects.Contains(EFunctionEffect::ExpensiveActorQuery))
 		{
+			TArray<FString> StackTrace;
+			StackTrace.Add(TargetFn->GetName());
+			StackTrace.Append(Summary.StackTrace.FindRef(EFunctionEffect::ExpensiveActorQuery));
+			UE_LOG(LogBPCheckCore, Warning, TEXT("%s"), *FString::Join(StackTrace, TEXT(" > ")));
+
 			Suggestions.Push(FSuggestionContext(ESuggestion::HotGetActorsOfClass, Call->NodeGuid));
 		}
 	}
@@ -228,7 +236,10 @@ void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 		if (!Context.HasFlag(Node->NodeGuid, ENodeFlag::InALoop)) return;
 
 		UFunction* TargetFn = Call->GetTargetFunction();
-		if (Context.EffectsOf(TargetFn).Contains(EFunctionEffect::Latent))
+
+		FFunctionSummary Summary = Context.EffectsOf(TargetFn);
+
+		if (Summary.Effects.Contains(EFunctionEffect::Latent))
 		{
 			Suggestions.Push(FSuggestionContext(ESuggestion::LatentNodeInLoop, Call->NodeGuid));
 		}
@@ -373,7 +384,7 @@ void FUnusedVariableRule::Check(const UBlueprint* Blueprint, TArray<FSuggestionC
 	}
 }
 
-TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
+FFunctionSummary FEffectResolver::EffectsOf(UFunction* Fn)
 {
 	BuildKnownEffects();
 
@@ -391,6 +402,7 @@ TSet<EFunctionEffect> FEffectResolver::EffectsOf(UFunction* Fn)
 	if (!Fn->IsInBlueprint())
 	{
 		EffectsCache.Add(Fn, {});
+		return {};
 	}
 
 	return ComputeBPFunctionEffects(Fn);
@@ -410,7 +422,7 @@ void FEffectResolver::BuildKnownEffects()
 		{
 			if (UFunction* Func = Class->FindFunctionByName(Name))
 			{
-				KnownEffects.Add(Func, { Effect });
+				KnownEffects.Add(Func, FFunctionSummary{ { Effect }, {} });
 			}
 			else
 			{
@@ -430,7 +442,7 @@ void FEffectResolver::BuildKnownEffects()
 	AddEffect(Sys, TEXT("PrintString"), EFunctionEffect::DebugSideEffect);
 }
 
-TSet<EFunctionEffect> FEffectResolver::ComputeBPFunctionEffects(UFunction* Fn)
+FFunctionSummary FEffectResolver::ComputeBPFunctionEffects(UFunction* Fn)
 {
 	// This avoids re-entry from the recursive call
 	EffectsCache.Add(Fn, {});
@@ -451,16 +463,35 @@ TSet<EFunctionEffect> FEffectResolver::ComputeBPFunctionEffects(UFunction* Fn)
 
 	if (!Entry) return {};
 
-	TSet<EFunctionEffect> Acc;
+	FFunctionSummary Acc;
+	TSet<UEdGraphNode*> Visited;
 
 	TFunction<void(UEdGraphNode*)> Walk;
 	Walk = [&](UEdGraphNode* Node)
 		{
+			if (!Node || Visited.Contains(Node)) return;
+			Visited.Add(Node);
+
 			if (UK2Node_CallFunction* Call = Cast<UK2Node_CallFunction>(Node))
 			{
 				if (UFunction* Target = Call->GetTargetFunction())
 				{
-					Acc.Append(EffectsOf(Target));
+					const FFunctionSummary Callee = EffectsOf(Target);
+					for (EFunctionEffect E : Callee.Effects)
+					{
+						Acc.Effects.Add(E);
+
+						if (!Acc.StackTrace.Contains(E))
+						{
+							TArray<FString>& StackTrace = Acc.StackTrace.Add(E);
+							StackTrace.Add(Target->GetName());
+
+							if (const TArray<FString>* Sub = Callee.StackTrace.Find(E))
+							{
+								StackTrace.Append(*Sub);
+							}
+						}
+					}
 				}
 			}
 
@@ -471,8 +502,6 @@ TSet<EFunctionEffect> FEffectResolver::ComputeBPFunctionEffects(UFunction* Fn)
 		};
 
 	Walk(Entry);
-
-
 	EffectsCache.Add(Fn, Acc);
 	return Acc;
 }

@@ -137,8 +137,34 @@ enum class ENodeFlag
 	InALoop = 1
 };
 
-class FEffectResolver;
-enum class EFunctionEffect;
+enum class EFunctionEffect
+{
+	ExpensiveActorQuery = 0,
+	Latent,
+	DebugSideEffect
+};
+
+struct FFunctionSummary
+{
+	TSet<EFunctionEffect> Effects;
+	TMap<EFunctionEffect, TArray<FString>> StackTrace;
+};
+
+class FEffectResolver
+{
+public:
+	FFunctionSummary EffectsOf(UFunction* Fn);
+
+	void ClearCache();
+private:
+	TMap<UFunction*, FFunctionSummary> KnownEffects;
+	TMap<UFunction*, FFunctionSummary> EffectsCache;
+	bool bKnownEffectsBuilt = false;
+
+	void BuildKnownEffects();
+	FFunctionSummary ComputeBPFunctionEffects(UFunction* Fn);
+	UEdGraph* FindFunctionGraph(UFunction* Fn);
+};
 
 class FAnalysisContext
 {
@@ -149,7 +175,7 @@ public:
 	void MarkNodeAlive(FGuid NodeGuid);
 
 	bool IsDead(FGuid NodeGuid) const;
-	TSet<EFunctionEffect> EffectsOf(UFunction* Fn) const;
+	FFunctionSummary EffectsOf(UFunction* Fn) const;
 
 	const UBPCheckSettings* Settings = nullptr;
 
@@ -238,29 +264,6 @@ struct FNextExecNode
 {
 	UEdGraphNode* Node;
 	uint8 PinIndex;
-};
-
-enum class EFunctionEffect
-{
-	ExpensiveActorQuery = 0,
-	Latent,
-	DebugSideEffect
-};
-
-class FEffectResolver
-{
-public:
-	TSet<EFunctionEffect> EffectsOf(UFunction* Fn);
-
-	void ClearCache();
-private:
-	TMap<UFunction*, TSet<EFunctionEffect>> KnownEffects;
-	TMap<UFunction*, TSet<EFunctionEffect>> EffectsCache;
-	bool bKnownEffectsBuilt = false;
-
-	void BuildKnownEffects();
-	TSet<EFunctionEffect> ComputeBPFunctionEffects(UFunction* Fn);
-	UEdGraph* FindFunctionGraph(UFunction* Fn);
 };
 
 class BPCHECKCORE_API FAnalyzer
