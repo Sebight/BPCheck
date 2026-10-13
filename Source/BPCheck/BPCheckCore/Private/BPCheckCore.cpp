@@ -240,7 +240,7 @@ void FLatentNodeInLoopRule::Check(const UEdGraphNode* Node, TArray<FSuggestionCo
 
 		if (Summary.Effects.Contains(EFunctionEffect::Latent))
 		{
-			FSuggestionContext Ctx = FSuggestionContext(ESuggestion::HotGetActorsOfClass, Call->NodeGuid);
+			FSuggestionContext Ctx = FSuggestionContext(ESuggestion::LatentNodeInLoop, Call->NodeGuid);
 			Ctx.StackTrace = Summary.StackTrace.FindRef(EFunctionEffect::Latent);
 
 			Suggestions.Push(Ctx);
@@ -424,7 +424,9 @@ void FEffectResolver::BuildKnownEffects()
 		{
 			if (UFunction* Func = Class->FindFunctionByName(Name))
 			{
-				KnownEffects.Add(Func, FFunctionSummary{ { Effect }, {} });
+				FFunctionSummary& Summary = KnownEffects.FindOrAdd(Func);
+				Summary.Effects.Add(Effect);
+				Summary.StackTrace.Add(Effect, { Func->GetName() });
 			}
 			else
 			{
@@ -485,13 +487,7 @@ FFunctionSummary FEffectResolver::ComputeBPFunctionEffects(UFunction* Fn)
 
 						if (!Acc.StackTrace.Contains(E))
 						{
-							TArray<FString>& StackTrace = Acc.StackTrace.Add(E);
-							StackTrace.Add(Target->GetName());
-
-							if (const TArray<FString>* Sub = Callee.StackTrace.Find(E))
-							{
-								StackTrace.Append(*Sub);
-							}
+							Acc.StackTrace.Add(E, Callee.StackTrace.FindRef(E));
 						}
 					}
 				}
@@ -504,6 +500,12 @@ FFunctionSummary FEffectResolver::ComputeBPFunctionEffects(UFunction* Fn)
 		};
 
 	Walk(Entry);
+
+	for (EFunctionEffect E : Acc.Effects)
+	{
+		Acc.StackTrace.FindChecked(E).Insert(Fn->GetName(), 0);
+	}
+
 	EffectsCache.Add(Fn, Acc);
 	return Acc;
 }
