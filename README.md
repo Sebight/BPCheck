@@ -1,6 +1,7 @@
 <h1 align="center">
     <div align="center">
-        <img width="450" alt="bpcheck_logo" src="https://github.com/user-attachments/assets/a7aa43ad-dd7c-4499-8dbb-53bf63b6e32c" />
+        <img width="850" alt="bpcheck_logo" src="https://github.com/user-attachments/assets/2b4fe264-46df-4731-a5cd-63a74bb6735b#gh-light-mode-only" />
+        <img width="450" alt="bpcheck_logo" src="https://github.com/user-attachments/assets/a7aa43ad-dd7c-4499-8dbb-53bf63b6e32c#gh-dark-mode-only" />
     </div>
 </h1>
 
