@@ -173,6 +173,8 @@ public:
 	void AddFlags(FGuid NodeGuid, TSet<ENodeFlag> Flags);
 	bool HasFlag(FGuid NodeGuid, ENodeFlag Flag) const;
 
+	bool Covers(FGuid NodeGuid, const TSet<ENodeFlag>& Flags) const;
+
 	void MarkNodeAlive(FGuid NodeGuid);
 
 	bool IsDead(FGuid NodeGuid) const;

@@ -117,6 +117,12 @@ bool FAnalysisContext::HasFlag(FGuid NodeGuid, ENodeFlag Flag) const
 	return NodeData.Find(NodeGuid)->Contains(Flag);
 }
 
+bool FAnalysisContext::Covers(FGuid NodeGuid, const TSet<ENodeFlag>& Flags) const
+{
+	const TSet<ENodeFlag>* Existing = NodeData.Find(NodeGuid);
+	return Existing && Flags.Difference(*Existing).IsEmpty();
+}
+
 void FAnalysisContext::MarkNodeAlive(FGuid NodeGuid)
 {
 	AliveNodes.Add(NodeGuid);
@@ -706,6 +712,8 @@ FAnalysisContext FAnalyzer::BuildContext(const UBlueprint* Blueprint)
 	TFunction<void(const UEdGraphNode*, TSet<ENodeFlag>, FAnalysisContext&)> WalkNode;
 	WalkNode = [&WalkNode, this](const UEdGraphNode* Node, TSet<ENodeFlag> Inherit, FAnalysisContext& Context)
 		{
+			if (Context.Covers(Node->NodeGuid, Inherit)) return;
+
 			Context.MarkNodeAlive(Node->NodeGuid);
 
 			TMap<uint8, TSet<ENodeFlag>> PinModifiers;
