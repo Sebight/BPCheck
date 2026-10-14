@@ -647,6 +647,7 @@ void SBPCheckSuggestionsPanel::OnItemDoubleClicked(TSharedPtr<FResultTreeItem> I
 
 void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext& CompilationContext, const FBlueprintCompiledData& Data)
 {
+	const double Start = FPlatformTime::Seconds();
 	if (!CompilationContext.Blueprint->GetPackage()->GetName().StartsWith("/Game/"))
 	{
 		// This skips analysis of any engine side Blueprints
@@ -720,7 +721,7 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 
 			if (!Node)
 			{
-				UE_LOG(LogBPCheckEditor, Warning, TEXT("Could not resolve node."));
+				// UE_LOG(LogBPCheckEditor, Warning, TEXT("Could not resolve node."));
 				return;
 			}
 
@@ -757,6 +758,9 @@ void UBPCompilerExtension::ProcessBlueprintCompiled(const FKismetCompilerContext
 
 	Settings->PruneDeadNodes(CompilationContext.Blueprint, AliveNodes);
 	FModuleManager::GetModuleChecked<FBPCheckEditorModule>("BPCheckEditor").SetSuggestionsForBlueprint(CompilationContext.Blueprint, Result.Suggestions);
+
+	const double ElapsedMs = (FPlatformTime::Seconds() - Start) * 1000.0;
+	UE_LOG(LogBPCheckEditor, Log, TEXT("Complete Analysis of %s took %.3fms (core=%.3fms)"), *CompilationContext.Blueprint->GetName(), ElapsedMs, Seconds * 1000.0);
 
 	Super::ProcessBlueprintCompiled(CompilationContext, Data);
 }

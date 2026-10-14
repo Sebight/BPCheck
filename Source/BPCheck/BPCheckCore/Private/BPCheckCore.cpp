@@ -259,8 +259,6 @@ void FGraphNodeCountRule::Check(const UEdGraph* Graph, TArray<FSuggestionContext
 	FString GraphName = Graph->GetName();
 	int32 GraphSize = Graph->Nodes.Num();
 
-	UE_LOG(LogBPCheckCore, Display, TEXT("%s=%d"), *GraphName, GraphSize);
-
 	if (GraphSize > Context.Settings->MaxGraphNodes)
 	{
 		Suggestions.Push(FSuggestionContext(ESuggestion::GraphSize, MakeWeakObjectPtr<const UEdGraph>(Graph)));
@@ -555,8 +553,6 @@ FAnalyzerResult FAnalyzer::Analyze(const FKismetCompilerContext& CompilationCont
 FAnalyzerResult FAnalyzer::Analyze(const UBlueprint* Blueprint)
 {
 	EffectResolver.ClearCache();
-
-	UE_LOG(LogBPCheckCore, Log, TEXT("Analyze %s"), *Blueprint->GetName());
 
 	const FAnalysisContext Context = BuildContext(Blueprint);
 
