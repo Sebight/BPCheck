@@ -11,9 +11,7 @@ BPCheck is an Unreal Engine plugin that scans your Blueprints for potential perf
 
 ## What it does
 
-BPCheck statically analyzes your Blueprints and flags common issues before they become problems in your project.
-
-The plugin covers **architecture** and **performance**. Casting to a Blueprint class makes a hard reference, so loading one asset loads everything it casts to, and BPCheck warns you against that. It also catches patterns that tend to cost frame time or cause unsafe behavior, so you can fix them early instead of hunting them down later.
+Blueprints make it easy to introduce performance overhead, memory bloat, or unintended behavior without noticing. BPCheck detects these patterns during compilation and reports them directly to you, so you can fix them early instead of hunting them down later.
 
 <div align="center">
     <img width="850" alt="bpcheck_logo" src="https://github.com/user-attachments/assets/f5bd9570-a56c-4e3d-ac36-8151d8882f96" />
