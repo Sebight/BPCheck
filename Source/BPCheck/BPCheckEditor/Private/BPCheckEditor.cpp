@@ -168,7 +168,6 @@ TSharedRef<SDockTab> FBPCheckEditorModule::CreateSuggestionsTab(const FSpawnTabA
 
 namespace ColumnIds
 {
-	static const FName Severity("Severity");
 	static const FName Code("Code");
 	static const FName Description("Description");
 }
@@ -199,28 +198,28 @@ public:
 	void Construct(const FArguments& InArgs, const TSharedRef<STableViewBase>& Owner)
 	{
 		Item = InArgs._Item;
-		FSuperRowType::Construct(FSuperRowType::FArguments().Style(&GetRowStyle()), Owner);
+		FSuperRowType::Construct(FSuperRowType::FArguments(), Owner);
 	}
 
 	virtual TSharedRef<SWidget> GenerateWidgetForColumn(const FName& Column) override
 	{
-		if (Column == ColumnIds::Severity)
-		{
-			return SNew(SBox)
-				.HAlign(HAlign_Center)
-				.VAlign(VAlign_Center)
-				[
-					SNew(SImage).Image(GetIcon()).ColorAndOpacity(GetTint())
-				];
-		}
 		if (Column == ColumnIds::Code)
 		{
 			return SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Fill)
 				[
-					SNew(SExpanderArrow, SharedThis(this)).IndentAmount(12)
+					SNew(SExpanderArrow, SharedThis(this))
+						.IndentAmount(16)
+						.ShouldDrawWires(true)
 				]
-				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2.f, 2.f, 6.f, 2.f)
+				[
+					SNew(SBox).WidthOverride(16.f).HeightOverride(16.f)
+						[
+							SNew(SImage).Image(GetIcon()).ColorAndOpacity(GetTint())
+						]
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(0.f, 2.f)
 				[
 					SNew(STextBlock)
 						.Text(FText::FromString(Item->Label))
@@ -229,9 +228,15 @@ public:
 		}
 		if (Column == ColumnIds::Description)
 		{
-			return SNew(STextBlock)
-				.Text(FText::FromString(Item->Description))
-				.ColorAndOpacity(FSlateColor(FStyleColors::Foreground));
+			const FText Desc = FText::FromString(Item->Description);
+			return SNew(SBox).VAlign(VAlign_Center).Padding(0.f, 2.f)
+				[
+					SNew(STextBlock)
+						.Text(Desc)
+						.ToolTipText(Desc)
+						.AutoWrapText(true)
+						.ColorAndOpacity(FSlateColor::UseSubduedForeground())
+				];
 		}
 		return SNullWidget::NullWidget;
 	}
@@ -540,12 +545,10 @@ void SBPCheckSuggestionsPanel::Construct(const FArguments& InArgs)
 				.OnContextMenuOpening(this, &SBPCheckSuggestionsPanel::OnContextMenuOpening)
 				.HeaderRow(
 					SNew(SHeaderRow)
-					+ SHeaderRow::Column(ColumnIds::Severity)
-					.DefaultLabel(FText::GetEmpty()).FixedWidth(28.0f)
 					+ SHeaderRow::Column(ColumnIds::Code)
-					.DefaultLabel(LOCTEXT("ColCode", "Code")).FillWidth(0.25f)
+					.DefaultLabel(LOCTEXT("ColCode", "Rule")).FillWidth(0.3f)
 					+ SHeaderRow::Column(ColumnIds::Description)
-					.DefaultLabel(LOCTEXT("ColDesc", "Description")).FillWidth(0.75f)
+					.DefaultLabel(LOCTEXT("ColDesc", "Description")).FillWidth(0.7f)
 				)
 		];
 }
@@ -558,8 +561,20 @@ void SBPCheckSuggestionsPanel::SetResults(TArray<TSharedPtr<FResultTreeItem>> In
 	{
 		TreeView->RequestTreeRefresh();
 
+		TFunction<void(const TSharedPtr<FResultTreeItem>&)> Expand =
+			[this, &Expand](const TSharedPtr<FResultTreeItem>& N)
+			{
+				TreeView->SetItemExpansion(N, true);
+				for (const TSharedPtr<FResultTreeItem>& C : N->Children)
+				{
+					if (C->bIsGroup) Expand(C);
+				}
+			};
+
 		for (const TSharedPtr<FResultTreeItem>& Node : RootNodes)
-			TreeView->SetItemExpansion(Node, true);
+		{
+			Expand(Node);
+		}
 	}
 }
 
