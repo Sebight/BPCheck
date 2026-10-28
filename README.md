@@ -15,6 +15,10 @@ BPCheck statically analyzes your Blueprints and flags common issues before they 
 
 The plugin covers **architecture** and **performance**. Casting to a Blueprint class makes a hard reference, so loading one asset loads everything it casts to, and BPCheck warns you against that. It also catches patterns that tend to cost frame time or cause unsafe behavior, so you can fix them early instead of hunting them down later.
 
+<div align="center">
+    <img width="850" alt="bpcheck_logo" src="https://github.com/user-attachments/assets/f5bd9570-a56c-4e3d-ac36-8151d8882f96" />
+</div>
+
 ## Install
 1. Copy the BPCheck folder into your project's Plugins folder.
 2. Open the project and enable the plugin in the Plugins window.
